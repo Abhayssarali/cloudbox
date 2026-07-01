@@ -1,0 +1,67 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(USER)
+  quotaBytes   BigInt   @default(0)
+  usedBytes    BigInt   @default(0)
+  groupId      String?
+  createdAt    DateTime @default(now())
+  agents       Agent[]
+
+  @@map("users")
+}
+
+model Agent {
+  id            String      @id @default(uuid())
+  cloudId       String      @unique
+  userId        String
+  publicKey     String
+  status        AgentStatus @default(OFFLINE)
+  version       String?
+  lastHeartbeat DateTime?
+  createdAt     DateTime    @default(now())
+  user          User        @relation(fields: [userId], references: [id])
+  files         File[]
+
+  @@map("agents")
+}
+
+model File {
+  id        String   @id @default(uuid())
+  agentId   String
+  path      String
+  name      String
+  size      BigInt
+  mimeType  String?
+  isFolder  Boolean  @default(false)
+  parentId  String?
+  updatedAt DateTime @updatedAt
+  agent     Agent    @relation(fields: [agentId], references: [id])
+
+  @@unique([agentId, path])
+  @@map("files")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  USER
+}
+
+enum AgentStatus {
+  ONLINE
+  OFFLINE
+}

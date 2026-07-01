@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+:root {
+  --font-inter: "Inter", sans-serif;
+
+  /* CloudBox color palette */
+  --cb-bg: #0a0a0f;
+  --cb-surface: #111118;
+  --cb-surface-2: #18181f;
+  --cb-border: rgba(255, 255, 255, 0.08);
+  --cb-border-hover: rgba(255, 255, 255, 0.16);
+
+  --cb-primary: #6366f1;
+  --cb-primary-light: #818cf8;
+  --cb-primary-glow: rgba(99, 102, 241, 0.35);
+
+  --cb-accent: #06b6d4;
+  --cb-accent-glow: rgba(6, 182, 212, 0.2);
+
+  --cb-text: #f8fafc;
+  --cb-text-muted: #94a3b8;
+  --cb-text-subtle: #64748b;
+
+  --cb-success: #10b981;
+  --cb-error: #f43f5e;
+  --cb-warning: #f59e0b;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  background-color: var(--cb-bg);
+  color: var(--cb-text);
+  font-family: var(--font-inter), sans-serif;
+  min-height: 100vh;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--cb-surface);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--cb-border-hover);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--cb-text-subtle);
+}
+
+/* Focus ring */
+*:focus-visible {
+  outline: 2px solid var(--cb-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
