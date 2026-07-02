@@ -72,25 +72,46 @@
 
 ---
 
-## Phase 2 — Auth Module ⏳ NOT STARTED
+## Phase 2 — Auth Module ✅ COMPLETED
 
 ### Planned
-- `POST /auth/signup` — create user, hash password (bcrypt/argon2), return JWT
-- `POST /auth/login` — verify password, issue access + refresh JWT
-- Auth middleware — verify JWT on protected routes
-- `GET /me` — returns current user from token
-- Frontend: wire `LoginForm` to real API, add signup page
-- Zustand store for session state
+| Item | Status | Notes |
+|---|---|---|
+| Prisma schema update | ✅ | Added `googleId String?`, made `passwordHash String?` (nullable for Google-only accounts). **Requires `pnpm --filter api run prisma:migrate` when Docker is running.** |
+| `POST /auth/signup` | ✅ | Create user, hash password (argon2), return JWT access + refresh in httpOnly cookies |
+| `POST /auth/login` | ✅ | Verify credentials, issue JWT |
+| `POST /auth/refresh` | ✅ | Rotate refresh token, issue new access token |
+| `POST /auth/logout` | ✅ | Clear httpOnly cookies |
+| `GET /me` | ✅ | Protected route — returns current user from token |
+| Auth middleware | ✅ | `requireAuth` Express middleware — verifies JWT, attaches `req.authPayload` |
+| Password hashing | ✅ | argon2 (preferred over bcrypt for new projects) |
+| **Google OAuth — Backend** | ✅ | `passport` + `passport-google-oauth20` + `express-session` |
+| `GET /auth/google` | ✅ | Redirects to Google consent screen |
+| `GET /auth/google/callback` | ✅ | Handles Google redirect — creates/finds user, issues JWT, redirects to `/dashboard` |
+| **Google OAuth — Frontend** | ✅ | "Continue with Google" button on login + signup pages |
+| Zustand session store | ✅ | `useAuthStore` — holds user object, login/logout actions |
+| Signup page | ✅ | `/signup` — email+password form + Google button |
+| Login page wired to API | ✅ | `LoginForm.tsx` hits real endpoint. |
+
+**New env vars needed:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`, `SESSION_SECRET`
+
+**New dependencies:** `passport`, `passport-google-oauth20`, `express-session`, `argon2`, `jsonwebtoken`, `cookie-parser`, `zustand`, and their `@types/*`
+
 
 ---
 
-## Phase 3 — Agent Registration ⏳ NOT STARTED
+## Phase 3 — Agent Registration + Cloud Registry ✅ COMPLETED
 
 ### Planned
-- `POST /agents/register` — agent sends cloudId + public key + claim code
-- Claim code flow in dashboard
-- Agent app scaffolded in `apps/agent`
-- systemd service unit file
+| Item | Status | Notes |
+|---|---|---|
+| `agents` table | ✅ | Already exists in schema. |
+| `POST /agents/claim` | ✅ | Generates short-lived 6-char hex claim code stored in Redis. |
+| `POST /agents/register` | ✅ | Verifies code, generates DB record for the new Agent linked to the user. |
+| Dashboard UI | ✅ | "Add New Node" button generating and displaying the claim code modal. |
+| Agent App scaffolding | ✅ | Created `apps/agent` in monorepo with `commander` CLI. |
+| Agent `register` flow | ✅ | Prompts for claim code, generates RSA-2048 keys & UUID, calls API, saves to `~/.cloudbox/agent.json`. |
+| Packaging / systemd | ✅ | Added `cloudbox-agent.service` template file. |
 
 ---
 

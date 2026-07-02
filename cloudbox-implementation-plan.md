@@ -270,13 +270,23 @@ Agents authenticate to the Gateway using a signed challenge (not just sending th
 
 ## Phase 2 — Auth Module
 1. `users` table + Prisma model.
-2. `/auth/signup`, `/auth/login` issuing JWT (access + refresh).
+2. `/auth/signup`, `/auth/login` issuing JWT (access + refresh tokens in httpOnly cookies).
 3. Password hashing (bcrypt/argon2).
 4. Auth middleware for protected routes.
-5. Frontend login/signup forms (React Hook Form + Zod), JWT in httpOnly cookie.
+5. Frontend login/signup forms (React Hook Form + Zod).
 6. Zustand store for session state.
+7. **Google OAuth 2.0** via `passport-google-oauth20` on the API:
+   - `GET /auth/google` → redirects browser to Google consent screen.
+   - `GET /auth/google/callback` → Google redirects back; API creates-or-finds user, issues our own JWT, redirects to dashboard.
+   - `googleId` column added to `users` table; `passwordHash` made nullable so Google-only accounts are valid.
+   - "Continue with Google" button on login + signup pages.
+   - Same JWT/cookie mechanism used for both email and Google auth — frontend is auth-strategy-agnostic.
 
-**End state:** User can sign up, log in, and hit a protected `/me` route from the frontend.
+**Dependencies added:** `passport`, `passport-google-oauth20`, `express-session` (for OAuth state), `@types/passport`, `@types/passport-google-oauth20`.
+
+**Environment variables needed:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`, `SESSION_SECRET`.
+
+**End state:** User can sign up / log in via email+password **or** Google, and hit a protected `/me` route from the frontend.
 
 ## Phase 3 — Agent Registration + Cloud Registry
 1. `agents` table (as in schema).

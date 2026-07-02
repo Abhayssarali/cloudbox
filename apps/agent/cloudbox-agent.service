@@ -1,0 +1,20 @@
+[Unit]
+Description=CloudBox Agent Service
+After=network.target
+
+[Service]
+Type=simple
+# Change to the path of your CloudBox installation
+WorkingDirectory=/opt/cloudbox/apps/agent
+# Run using Node.js (assuming you've built with `pnpm run build`)
+ExecStart=/usr/bin/node dist/index.js start
+Restart=on-failure
+RestartSec=5
+# Adjust user as needed
+User=root
+Environment=NODE_ENV=production
+# Update API_URL to match your backend's actual domain
+Environment=API_URL=https://api.yourcloudboxdomain.com
+
+[Install]
+WantedBy=multi-user.target

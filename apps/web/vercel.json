@@ -1,0 +1,7 @@
+{
+  "buildCommand": "pnpm --filter @cloudbox/shared-types build && pnpm --filter web build",
+  "installCommand": "pnpm install",
+  "outputDirectory": "apps/web/.next",
+  "framework": "nextjs",
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- apps/web/ packages/shared-types/"
+}

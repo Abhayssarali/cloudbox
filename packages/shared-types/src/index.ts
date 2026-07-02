@@ -19,6 +19,7 @@ export interface User {
   usedBytes: bigint;
   groupId: string | null;
   createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface Agent {
@@ -42,6 +43,20 @@ export interface FileMeta {
   isFolder: boolean;
   parentId: string | null;
   updatedAt: Date;
+}
+
+// ---- Auth Types ----
+
+export interface AuthTokenPayload {
+  userId: string;
+  role: Role;
+  type: "access" | "refresh";
+}
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  role: Role;
 }
 
 // ---- Gateway WebSocket Message Protocol ----

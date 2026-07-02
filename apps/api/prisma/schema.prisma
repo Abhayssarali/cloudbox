@@ -13,12 +13,14 @@ datasource db {
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
-  passwordHash String
+  passwordHash String?
+  googleId     String?  @unique
   role         Role     @default(USER)
   quotaBytes   BigInt   @default(0)
   usedBytes    BigInt   @default(0)
   groupId      String?
   createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
   agents       Agent[]
 
   @@map("users")
