@@ -153,7 +153,17 @@
 | Agent `DOWNLOAD_FILE` handler | ✅ | Reads file from disk, streams as `FILE_CHUNK` messages with `final: true` sentinel. |
 | Agent `UPLOAD_FILE` + `FILE_CHUNK` handler | ✅ | Opens write stream per requestId, writes decoded chunks, closes and sends `UPLOAD_ACK`. |
 
-## Phase 7 — Quotas, Groups, Storage Pools ⏳ NOT STARTED
+## Phase 7 — Quotas, Groups, Storage Pools ✅ COMPLETED
+
+### Planned
+| Item | Status | Notes |
+|---|---|---|
+| `Group` model in `schema.prisma` | ✅ | Created model and relation to User, ran migration |
+| `requireRole.ts` middleware | ✅ | Restricts endpoints to specified roles (e.g. `ADMIN`) |
+| `/admin` API Routes | ✅ | Full CRUD for groups, endpoints for assigning users to groups, and setting per-user quotas |
+| Quota enforcement | ✅ | Modified `POST /files/upload` to block uploads that exceed user quota (`413 Payload Too Large`) |
+| Used Bytes tracking | ✅ | Modified `POST /files/upload` to increment `usedBytes` upon successful `UPLOAD_ACK` |
+
 ## Phase 8 — Dashboard UI ⏳ NOT STARTED
 ## Phase 9 — Admin Dashboard ⏳ NOT STARTED
 ## Phase 10 — Sharing ⏳ NOT STARTED

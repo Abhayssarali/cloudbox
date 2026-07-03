@@ -162,7 +162,17 @@ filesRouter.post("/upload", requireAuth, async (req: Request, res: Response) => 
   const userId = req.authPayload!.userId;
 
   try {
-    const agent = await prisma.agent.findFirst({ where: { userId } });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { agents: true },
+    });
+
+    if (!user) {
+      res.status(404).json({ success: false, error: "User not found" });
+      return;
+    }
+
+    const agent = user.agents[0]; // Assuming 1 agent per user for now
 
     if (!agent) {
       res.status(404).json({ success: false, error: "No agent registered" });
@@ -172,6 +182,17 @@ filesRouter.post("/upload", requireAuth, async (req: Request, res: Response) => 
     if (agent.status === "OFFLINE") {
       res.status(503).json({ success: false, error: "Agent is offline — cannot upload" });
       return;
+    }
+
+    // Check quota
+    const contentLength = req.headers["content-length"];
+    const expectedSize = contentLength ? parseInt(contentLength, 10) : 0;
+    
+    if (user.quotaBytes > 0n) {
+      if (user.usedBytes + BigInt(expectedSize) > user.quotaBytes) {
+        res.status(413).json({ success: false, error: "Storage quota exceeded" });
+        return;
+      }
     }
 
     const uploadFolder = req.query["folder"] ? String(req.query["folder"]) : "/";
@@ -225,6 +246,13 @@ filesRouter.post("/upload", requireAuth, async (req: Request, res: Response) => 
 
         if (ack.type === "UPLOAD_ACK" && ack.success) {
           console.log(`[Upload] Completed "${filename}" requestId=${requestId}`);
+          
+          // Update usedBytes
+          await prisma.user.update({
+            where: { id: userId },
+            data: { usedBytes: { increment: expectedSize } },
+          });
+
           if (!responded) {
             responded = true;
             res.json({ success: true, data: { path: targetPath, name: filename } });

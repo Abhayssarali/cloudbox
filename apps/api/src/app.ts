@@ -10,6 +10,7 @@ import { healthRouter } from "./routes/health.js";
 import { authRouter } from "./routes/auth.js";
 import { agentsRouter } from "./routes/agents.js";
 import { filesRouter } from "./routes/files.js";
+import { adminRouter } from "./routes/admin.js";
 
 const app: Express = express();
 
@@ -56,6 +57,7 @@ app.use("/health", healthRouter);
 app.use("/auth", authRouter);
 app.use("/agents", agentsRouter);
 app.use("/files", filesRouter);
+app.use("/admin", adminRouter);
 
 // 404 handler
 app.use((_req, res) => {

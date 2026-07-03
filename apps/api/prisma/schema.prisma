@@ -21,6 +21,7 @@ model User {
   groupId      String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  group        Group?   @relation(fields: [groupId], references: [id])
   agents       Agent[]
 
   @@map("users")
@@ -66,4 +67,14 @@ enum Role {
 enum AgentStatus {
   ONLINE
   OFFLINE
+}
+
+model Group {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  users       User[]
+
+  @@map("groups")
 }
