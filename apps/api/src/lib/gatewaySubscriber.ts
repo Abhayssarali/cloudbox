@@ -1,5 +1,6 @@
 import { Redis } from "ioredis";
 import { prisma } from "./prisma.js";
+import { requestRegistry } from "./requestRegistry.js";
 
 const REDIS_URL = process.env["REDIS_URL"] ?? "redis://localhost:6379";
 const RESP_CHANNEL = "gateway:responses";
@@ -163,6 +164,15 @@ export async function initGatewaySubscriber() {
           }[];
         };
       };
+
+      // Route transfer messages to waiting HTTP handlers
+      if (message.type === "FILE_CHUNK" || message.type === "UPLOAD_ACK" || message.type === "ERROR") {
+        const requestId = (message as unknown as { requestId: string }).requestId;
+        if (requestId) {
+          requestRegistry.emit(requestId, message);
+          return;
+        }
+      }
 
       if (message.type === "METADATA_SYNC" && message.files) {
         // Find agent in DB

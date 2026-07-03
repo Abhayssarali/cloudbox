@@ -140,7 +140,19 @@
 | DB Sync Service | ✅ | API subscribes to Redis, reconciles DB `files` table, and resolves hierarchy. |
 | `/files` API Route | ✅ | `GET /files?folder=...` returns DB state, formatting BigInt fields to safe strings. |
 
-## Phase 6 — Upload / Download ⏳ NOT STARTED
+## Phase 6 — Upload / Download ✅ COMPLETED
+
+### Planned
+| Item | Status | Notes |
+|---|---|---|
+| `requestRegistry.ts` | ✅ | EventEmitter bridge from async WebSocket agent responses to sync HTTP handlers. |
+| `gatewayPublisher.ts` | ✅ | Publishes commands from API to Gateway via Redis `gateway:commands`. |
+| `gatewaySubscriber.ts` routing | ✅ | Routes `FILE_CHUNK`, `UPLOAD_ACK`, `ERROR` to `requestRegistry`. |
+| `GET /files/download/:id` | ✅ | Streams file from Agent → Gateway → HTTP response in 64KB base64 chunks. |
+| `POST /files/upload?folder=` | ✅ | Streams browser upload → Gateway → Agent disk via busboy + chunked `FILE_CHUNK` messages. |
+| Agent `DOWNLOAD_FILE` handler | ✅ | Reads file from disk, streams as `FILE_CHUNK` messages with `final: true` sentinel. |
+| Agent `UPLOAD_FILE` + `FILE_CHUNK` handler | ✅ | Opens write stream per requestId, writes decoded chunks, closes and sends `UPLOAD_ACK`. |
+
 ## Phase 7 — Quotas, Groups, Storage Pools ⏳ NOT STARTED
 ## Phase 8 — Dashboard UI ⏳ NOT STARTED
 ## Phase 9 — Admin Dashboard ⏳ NOT STARTED

@@ -7,6 +7,8 @@ import { WebSocket } from "ws";
 import type { GatewayMessage } from "@cloudbox/shared-types";
 import { watchStorage } from "./watcher.js";
 
+const DOWNLOAD_CHUNK_SIZE = 64 * 1024; // 64 KB
+
 const API_URL = process.env.API_URL || "http://localhost:4000";
 const GATEWAY_URL = process.env.GATEWAY_URL || "ws://localhost:4001";
 const CONFIG_DIR = path.join(os.homedir(), ".cloudbox");
@@ -96,6 +98,8 @@ program
     let reconnectDelay = 1000;
     const MAX_DELAY = 30_000;
     let activeWatcher: ReturnType<typeof watchStorage> | null = null;
+    // Track active upload write streams: requestId → WriteStream
+    const activeUploads = new Map<string, fs.WriteStream>();
 
     function connect() {
       console.log(`[Agent] Connecting to Gateway: ${GATEWAY_URL}`);
@@ -144,6 +148,61 @@ program
             case "HEARTBEAT":
               send(ws, { type: "HEARTBEAT_ACK", timestamp: Date.now() });
               break;
+
+            case "DOWNLOAD_FILE": {
+              const dlPath = path.join(CONFIG_DIR, "storage", msg.path);
+              console.log(`[Agent] DOWNLOAD_FILE: ${dlPath}`);
+              if (!fs.existsSync(dlPath)) {
+                send(ws, { type: "ERROR", requestId: msg.requestId, message: "File not found on agent" });
+                break;
+              }
+              // Stream in chunks
+              (async () => {
+                const stream = fs.createReadStream(dlPath, { highWaterMark: DOWNLOAD_CHUNK_SIZE });
+                for await (const chunk of stream) {
+                  send(ws, {
+                    type: "FILE_CHUNK",
+                    requestId: msg.requestId,
+                    chunk: (chunk as Buffer).toString("base64"),
+                    final: false,
+                  });
+                }
+                send(ws, { type: "FILE_CHUNK", requestId: msg.requestId, chunk: "", final: true });
+                console.log(`[Agent] DOWNLOAD_FILE complete: ${dlPath}`);
+              })().catch((err) => {
+                console.error("[Agent] DOWNLOAD_FILE error:", err);
+                send(ws, { type: "ERROR", requestId: msg.requestId, message: String(err) });
+              });
+              break;
+            }
+
+            case "UPLOAD_FILE": {
+              const ulPath = path.join(CONFIG_DIR, "storage", msg.path);
+              console.log(`[Agent] UPLOAD_FILE: ${ulPath}`);
+              const ulDir = path.dirname(ulPath);
+              if (!fs.existsSync(ulDir)) fs.mkdirSync(ulDir, { recursive: true });
+              const writeStream = fs.createWriteStream(ulPath);
+              activeUploads.set(msg.requestId, writeStream);
+              break;
+            }
+
+            case "FILE_CHUNK": {
+              const stream = activeUploads.get(msg.requestId);
+              if (!stream) {
+                console.warn(`[Agent] FILE_CHUNK for unknown requestId: ${msg.requestId}`);
+                break;
+              }
+              if (msg.chunk) {
+                stream.write(Buffer.from(msg.chunk, "base64"));
+              }
+              if (msg.final) {
+                stream.end();
+                activeUploads.delete(msg.requestId);
+                send(ws, { type: "UPLOAD_ACK", requestId: msg.requestId, success: true });
+                console.log(`[Agent] UPLOAD complete for requestId: ${msg.requestId}`);
+              }
+              break;
+            }
 
             default:
               console.log(`[Agent] Received message: ${msg.type}`);
