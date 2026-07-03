@@ -9,6 +9,7 @@ import { passport } from "./lib/passport.js";
 import { healthRouter } from "./routes/health.js";
 import { authRouter } from "./routes/auth.js";
 import { agentsRouter } from "./routes/agents.js";
+import { filesRouter } from "./routes/files.js";
 
 const app: Express = express();
 
@@ -54,6 +55,7 @@ if (process.env["NODE_ENV"] !== "test") {
 app.use("/health", healthRouter);
 app.use("/auth", authRouter);
 app.use("/agents", agentsRouter);
+app.use("/files", filesRouter);
 
 // 404 handler
 app.use((_req, res) => {

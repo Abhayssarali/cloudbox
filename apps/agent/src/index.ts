@@ -5,6 +5,7 @@ import path from "path";
 import os from "os";
 import { WebSocket } from "ws";
 import type { GatewayMessage } from "@cloudbox/shared-types";
+import { watchStorage } from "./watcher.js";
 
 const API_URL = process.env.API_URL || "http://localhost:4000";
 const GATEWAY_URL = process.env.GATEWAY_URL || "ws://localhost:4001";
@@ -94,6 +95,7 @@ program
     const config = loadConfig();
     let reconnectDelay = 1000;
     const MAX_DELAY = 30_000;
+    let activeWatcher: ReturnType<typeof watchStorage> | null = null;
 
     function connect() {
       console.log(`[Agent] Connecting to Gateway: ${GATEWAY_URL}`);
@@ -120,6 +122,18 @@ program
 
             case "AUTH_OK":
               console.log("[Agent] ✅ Authenticated! Agent is now ONLINE.");
+              
+              if (activeWatcher) {
+                activeWatcher.close();
+              }
+
+              const storageDir = path.join(CONFIG_DIR, "storage");
+              activeWatcher = watchStorage(storageDir, (files) => {
+                send(ws, {
+                  type: "METADATA_SYNC",
+                  files,
+                });
+              });
               break;
 
             case "AUTH_ERROR":
@@ -141,6 +155,10 @@ program
 
       ws.on("close", () => {
         console.log(`[Agent] Disconnected. Reconnecting in ${reconnectDelay / 1000}s...`);
+        if (activeWatcher) {
+          activeWatcher.close();
+          activeWatcher = null;
+        }
         setTimeout(connect, reconnectDelay);
         reconnectDelay = Math.min(reconnectDelay * 2, MAX_DELAY); // exponential backoff
       });
@@ -155,6 +173,9 @@ program
     // Keep process alive
     process.on("SIGINT", () => {
       console.log("\n[Agent] Shutting down...");
+      if (activeWatcher) {
+        activeWatcher.close();
+      }
       process.exit(0);
     });
   });

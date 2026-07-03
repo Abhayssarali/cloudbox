@@ -129,7 +129,17 @@
 
 ---
 
-## Phase 5 — File Metadata + Sync ⏳ NOT STARTED
+## Phase 5 — File Metadata + Sync ✅ COMPLETED
+
+### Planned
+| Item | Status | Notes |
+|---|---|---|
+| File watch & metadata scan | ✅ | Agent uses `chokidar` + `mime-types` to scan `~/.cloudbox/storage` and watch for changes. |
+| Tunnel Sync Message | ✅ | Debounced state-based `METADATA_SYNC` message sent from agent to Gateway. |
+| Redis Relay for Sync | ✅ | Gateway forwards `METADATA_SYNC` to Redis channel `gateway:responses`. |
+| DB Sync Service | ✅ | API subscribes to Redis, reconciles DB `files` table, and resolves hierarchy. |
+| `/files` API Route | ✅ | `GET /files?folder=...` returns DB state, formatting BigInt fields to safe strings. |
+
 ## Phase 6 — Upload / Download ⏳ NOT STARTED
 ## Phase 7 — Quotas, Groups, Storage Pools ⏳ NOT STARTED
 ## Phase 8 — Dashboard UI ⏳ NOT STARTED

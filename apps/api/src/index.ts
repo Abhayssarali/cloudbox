@@ -24,6 +24,16 @@ async function main() {
     process.exit(1);
   }
 
+  // Initialize Gateway Subscriber
+  try {
+    const { initGatewaySubscriber } = await import("./lib/gatewaySubscriber.js");
+    await initGatewaySubscriber();
+    console.log("✅ Gateway Subscriber initialized");
+  } catch (err) {
+    console.error("❌ Gateway Subscriber initialization failed:", err);
+    process.exit(1);
+  }
+
   app.listen(PORT, () => {
     console.log(`🚀 CloudBox API running on http://localhost:${PORT}`);
     console.log(`   Environment: ${process.env["NODE_ENV"] ?? "development"}`);

@@ -40,17 +40,22 @@ pnpm --filter api run prisma:migrate
 ```
 
 ## 5. Start Development Servers
-Start both the Frontend (Next.js) and Backend (Express API) concurrently:
+Start the Web App, API Server, and Gateway Server concurrently:
 ```bash
 pnpm dev
 ```
-
----
-
-### Accessing the App
 - **Web App (Frontend)**: [http://localhost:3000](http://localhost:3000)
 - **API Server (Backend)**: [http://localhost:4000](http://localhost:4000)
-- **API Health Check**: [http://localhost:4000/health](http://localhost:4000/health)
-- **Database Studio**: `pnpm --filter api run prisma:studio` (Opens at http://localhost:5555)
+- **Gateway Server (WebSocket)**: [ws://localhost:4001](ws://localhost:4001)
 
-> **Note**: I will update this file as we add more moving parts (like the Gateway or Agent) in future phases!
+## 6. Start the Agent
+To start your storage node Agent, open a new terminal and run:
+```bash
+pnpm --filter agent run dev start
+```
+*(On first run, this connects to the Gateway, performs authentication, and creates your local storage folder at `~/.cloudbox/storage`)*
+
+## 7. Verifying File Sync (Phase 5)
+1. Add some files/directories inside the agent's storage folder (`~/.cloudbox/storage`).
+2. The agent automatically detects changes via `chokidar` and reconciles metadata with the backend.
+3. Verify by making an authorized request to `/files?folder=/` or checking the dashboard.

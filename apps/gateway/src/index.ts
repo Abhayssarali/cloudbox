@@ -48,6 +48,7 @@ async function main() {
           case "FILE_LIST_RESULT":
           case "FILE_CHUNK":
           case "UPLOAD_ACK":
+          case "METADATA_SYNC":
           case "ERROR":
             await publishResponse(cloudId, msg);
             break;

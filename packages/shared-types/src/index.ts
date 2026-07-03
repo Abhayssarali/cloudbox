@@ -74,7 +74,18 @@ export type GatewayMessage =
   | { type: "AUTH_RESPONSE"; cloudId: string; signature: string }
   | { type: "AUTH_OK"; agentId: string }
   | { type: "AUTH_ERROR"; message: string }
-  | { type: "ERROR"; requestId: string; message: string };
+  | { type: "ERROR"; requestId: string; message: string }
+  | {
+      type: "METADATA_SYNC";
+      files: {
+        path: string;
+        name: string;
+        size: string;
+        isFolder: boolean;
+        mimeType: string | null;
+        updatedAt: string;
+      }[];
+    };
 
 // ---- API Response Shapes ----
 
