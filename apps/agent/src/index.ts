@@ -1,12 +1,34 @@
 import { Command } from "commander";
-import { generateKeyPairSync, randomUUID } from "crypto";
+import { generateKeyPairSync, randomUUID, createSign } from "crypto";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { WebSocket } from "ws";
+import type { GatewayMessage } from "@cloudbox/shared-types";
 
 const API_URL = process.env.API_URL || "http://localhost:4000";
+const GATEWAY_URL = process.env.GATEWAY_URL || "ws://localhost:4001";
 const CONFIG_DIR = path.join(os.homedir(), ".cloudbox");
 const CONFIG_FILE = path.join(CONFIG_DIR, "agent.json");
+
+interface AgentConfig {
+  cloudId: string;
+  privateKey: string;
+  publicKey: string;
+  agentId: string;
+}
+
+function loadConfig(): AgentConfig {
+  if (!fs.existsSync(CONFIG_FILE)) {
+    console.error("[Error] Agent is not registered. Run: cloudbox-agent register <code>");
+    process.exit(1);
+  }
+  return JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8")) as AgentConfig;
+}
+
+function send(ws: WebSocket, msg: GatewayMessage) {
+  ws.send(JSON.stringify(msg));
+}
 
 const program = new Command();
 
@@ -15,6 +37,7 @@ program
   .description("CloudBox Agent CLI")
   .version("1.0.0");
 
+// ---- REGISTER command ----
 program
   .command("register")
   .description("Register this agent with the CloudBox server")
@@ -42,38 +65,98 @@ program
       const res = await fetch(`${API_URL}/agents/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          claimCode: code,
-          cloudId,
-          publicKey,
-        }),
+        body: JSON.stringify({ claimCode: code, cloudId, publicKey }),
       });
 
       const data = await res.json() as any;
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Registration failed");
-      }
+      if (!res.ok || !data.success) throw new Error(data.error || "Registration failed");
 
       console.log("[CloudBox] API Registration successful!");
 
-      if (!fs.existsSync(CONFIG_DIR)) {
-        fs.mkdirSync(CONFIG_DIR, { recursive: true });
-      }
+      if (!fs.existsSync(CONFIG_DIR)) fs.mkdirSync(CONFIG_DIR, { recursive: true });
 
-      const config = {
-        cloudId,
-        privateKey,
-        publicKey,
-        agentId: data.data.agentId,
-      };
-
+      const config: AgentConfig = { cloudId, privateKey, publicKey, agentId: data.data.agentId };
       fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), { mode: 0o600 });
+
       console.log(`[CloudBox] Configuration saved securely to ${CONFIG_FILE}`);
-      console.log("[CloudBox] Ready! (The start command will be added in Phase 4)");
+      console.log("[CloudBox] Done! Run: cloudbox-agent start");
     } catch (err: any) {
       console.error(`[Error] ${err.message}`);
       process.exit(1);
     }
+  });
+
+// ---- START command ----
+program
+  .command("start")
+  .description("Start the agent and connect to the CloudBox gateway")
+  .action(() => {
+    const config = loadConfig();
+    let reconnectDelay = 1000;
+    const MAX_DELAY = 30_000;
+
+    function connect() {
+      console.log(`[Agent] Connecting to Gateway: ${GATEWAY_URL}`);
+      const ws = new WebSocket(GATEWAY_URL);
+
+      ws.on("open", () => {
+        console.log("[Agent] Connected to Gateway. Waiting for auth challenge...");
+        reconnectDelay = 1000; // reset backoff on successful connect
+      });
+
+      ws.on("message", (raw) => {
+        try {
+          const msg: GatewayMessage = JSON.parse(raw.toString());
+
+          switch (msg.type) {
+            case "AUTH_CHALLENGE": {
+              console.log("[Agent] Received auth challenge — signing...");
+              const signer = createSign("SHA256");
+              signer.update(msg.challenge);
+              const signature = signer.sign(config.privateKey, "base64");
+              send(ws, { type: "AUTH_RESPONSE", cloudId: config.cloudId, signature });
+              break;
+            }
+
+            case "AUTH_OK":
+              console.log("[Agent] ✅ Authenticated! Agent is now ONLINE.");
+              break;
+
+            case "AUTH_ERROR":
+              console.error(`[Agent] Auth failed: ${msg.message}`);
+              ws.close();
+              break;
+
+            case "HEARTBEAT":
+              send(ws, { type: "HEARTBEAT_ACK", timestamp: Date.now() });
+              break;
+
+            default:
+              console.log(`[Agent] Received message: ${msg.type}`);
+          }
+        } catch (err) {
+          console.error("[Agent] Failed to parse message:", err);
+        }
+      });
+
+      ws.on("close", () => {
+        console.log(`[Agent] Disconnected. Reconnecting in ${reconnectDelay / 1000}s...`);
+        setTimeout(connect, reconnectDelay);
+        reconnectDelay = Math.min(reconnectDelay * 2, MAX_DELAY); // exponential backoff
+      });
+
+      ws.on("error", (err) => {
+        console.error("[Agent] WebSocket error:", err.message);
+      });
+    }
+
+    connect();
+
+    // Keep process alive
+    process.on("SIGINT", () => {
+      console.log("\n[Agent] Shutting down...");
+      process.exit(0);
+    });
   });
 
 program.parse(process.argv);

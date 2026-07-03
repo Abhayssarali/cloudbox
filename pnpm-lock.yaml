@@ -20,12 +20,18 @@ importers:
       '@cloudbox/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
       commander:
         specifier: ^12.1.0
         version: 12.1.0
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1
+      ws:
+        specifier: ^8.21.0
+        version: 8.21.0
       zod:
         specifier: ^3.23.8
         version: 3.25.76
@@ -141,6 +147,46 @@ importers:
         version: 5.9.3
       typescript-eslint:
         specifier: ^8.62.1
+        version: 8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+
+  apps/gateway:
+    dependencies:
+      '@cloudbox/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
+      '@prisma/client':
+        specifier: ^5.22.0
+        version: 5.22.0(prisma@5.22.0)
+      dotenv:
+        specifier: ^16.4.5
+        version: 16.6.1
+      ioredis:
+        specifier: ^5.4.2
+        version: 5.11.1
+      ws:
+        specifier: ^8.18.0
+        version: 8.21.0
+    devDependencies:
+      '@eslint/js':
+        specifier: ^9.9.0
+        version: 9.39.4
+      '@types/node':
+        specifier: ^20.14.15
+        version: 20.19.43
+      '@types/ws':
+        specifier: ^8.5.12
+        version: 8.18.1
+      eslint:
+        specifier: ^9.9.0
+        version: 9.39.4(jiti@2.7.0)
+      tsx:
+        specifier: ^4.16.5
+        version: 4.22.4
+      typescript:
+        specifier: ^5.5.4
+        version: 5.9.3
+      typescript-eslint:
+        specifier: ^8.0.1
         version: 8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
 
   apps/web:
@@ -968,6 +1014,9 @@ packages:
 
   '@types/serve-static@1.15.10':
     resolution: {integrity: sha512-tRs1dB+g8Itk72rlSI2ZrW6vZg0YrLI81iQSTkMmOqnqCaNr/8Ek4VwWcN5vZgCYWbg/JJSGBlUaYGAOP73qBw==}
+
+  '@types/ws@8.18.1':
+    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
   '@typescript-eslint/eslint-plugin@8.62.1':
     resolution: {integrity: sha512-4EQM77WgVNxj7OkL/5b/D/xZsw00G577+UriYTC7JF5opcF3T2AuoeY7ueLaZgSVjSgCS6yOAJB5bRGLPSJUzA==}
@@ -2754,6 +2803,18 @@ packages:
     resolution: {integrity: sha512-BN22B5eaMMI9UMtjrGd5g5eCYPpCPDUy0FJXbYsaT5zYxjFOckS53SQDE3pWkVoWpHXVb3BrYcEN4Twa55B5cA==}
     engines: {node: '>=0.10.0'}
 
+  ws@8.21.0:
+    resolution: {integrity: sha512-Vsp28b7DRcimFQvrqu2Wek3z1iYxDCWqHYB8Qsnk/S4RfaCQzPGPyBNuVjJV3cd6UiKtUtp6sNM77gWvzcCH+g==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
   yallist@3.1.1:
     resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
 
@@ -3444,6 +3505,10 @@ snapshots:
       '@types/http-errors': 2.0.5
       '@types/node': 20.19.43
       '@types/send': 0.17.6
+
+  '@types/ws@8.18.1':
+    dependencies:
+      '@types/node': 20.19.43
 
   '@typescript-eslint/eslint-plugin@8.62.1(@typescript-eslint/parser@8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)':
     dependencies:
@@ -5558,6 +5623,8 @@ snapshots:
       isexe: 2.0.0
 
   word-wrap@1.2.5: {}
+
+  ws@8.21.0: {}
 
   yallist@3.1.1: {}
 

@@ -115,14 +115,17 @@
 
 ---
 
-## Phase 4 — WebSocket Gateway + Tunnel ⏳ NOT STARTED
+## Phase 4 — WebSocket Gateway + Tunnel ✅ COMPLETED
 
 ### Planned
-- `apps/gateway` scaffolded (ws server)
-- Agent authenticates via signed challenge
-- `cloudId → socket` map backed by Redis pub/sub
-- Heartbeat / offline detection
-- Full message protocol implemented
+| Item | Status | Notes |
+|---|---|---|
+| `apps/gateway` | ✅ | Created WebSocket server using `ws`. |
+| Cryptographic Auth | ✅ | Agent signs challenge, gateway verifies with public key from DB. |
+| In-memory Registry | ✅ | Maps `cloudId` to active WebSocket. |
+| Heartbeats | ✅ | 30s ping, drops agents after 65s of silence. |
+| Redis Relay | ✅ | API <-> Gateway <-> Agent pub/sub bridge. |
+| Live Dashboard UI | ✅ | Frontend polls API and shows ONLINE/OFFLINE dots. |
 
 ---
 
