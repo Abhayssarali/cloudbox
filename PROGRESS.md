@@ -164,7 +164,17 @@
 | Quota enforcement | ✅ | Modified `POST /files/upload` to block uploads that exceed user quota (`413 Payload Too Large`) |
 | Used Bytes tracking | ✅ | Modified `POST /files/upload` to increment `usedBytes` upon successful `UPLOAD_ACK` |
 
-## Phase 8 — Dashboard UI ⏳ NOT STARTED
+## Phase 8 — Dashboard UI ✅ COMPLETED
+
+### Planned
+| Item | Status | Notes |
+|---|---|---|
+| Dependencies | ✅ | Added `@tanstack/react-query`, `@tanstack/react-query-devtools`, and `lucide-react` to `apps/web`. |
+| Layout & Sidebar | ✅ | Created `app/dashboard/layout.tsx` with a persistent sidebar (Overview, My Files, Settings) and refactored the old dashboard view into an "Overview". |
+| File Explorer (`/dashboard/files`) | ✅ | Built `FileExplorer.tsx` with breadcrumbs, grid view for files/folders, and responsive UI. |
+| React Query Integration | ✅ | Added `Providers` in `layout.tsx`. Implemented `useQuery` for fetching files and `useMutation` for uploading files, including automatic cache invalidation on success. |
+| Right Panel | ✅ | Added a slide-out details panel displaying file name, size, type, modified date, and storage node ID, along with a Download button. |
+
 ## Phase 9 — Admin Dashboard ⏳ NOT STARTED
 ## Phase 10 — Sharing ⏳ NOT STARTED
 ## Phase 11 — Hardening & DevOps ⏳ NOT STARTED

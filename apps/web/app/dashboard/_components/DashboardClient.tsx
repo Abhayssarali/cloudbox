@@ -62,26 +62,8 @@ export default function DashboardClient() {
   const onlineCount = agents.filter((a) => a.status === "ONLINE").length;
 
   return (
-    <div className="dash">
-      <header className="dash__header">
-        <div className="dash__header-left">
-          <div className="dash__logo">
-            <svg viewBox="0 0 48 48" fill="none">
-              <rect width="48" height="48" rx="14" fill="url(#sg1)" />
-              <path d="M14 28c0-3.314 2.686-6 6-6a5.978 5.978 0 013.6 1.2A6 6 0 0130 20c3.314 0 6 2.686 6 6v2H14v-2z" fill="white" fillOpacity=".9" />
-              <circle cx="24" cy="17" r="4" fill="white" fillOpacity=".6" />
-              <defs><linearGradient id="sg1" x1="0" y1="0" x2="48" y2="48"><stop stopColor="#6366f1"/><stop offset="1" stopColor="#06b6d4"/></linearGradient></defs>
-            </svg>
-          </div>
-          <h1>CloudBox</h1>
-        </div>
-        <div className="dash__header-right">
-          <span className="dash__user">{user?.email}</span>
-          <button onClick={handleLogout} className="dash__logout-btn">Sign out</button>
-        </div>
-      </header>
-
-      <div className="dash__content">
+    <div className="flex flex-col flex-1 p-8 overflow-y-auto">
+      <div className="max-w-5xl w-full mx-auto">
         <div className="dash__hero">
           <h2>Welcome back, {user?.email?.split("@")[0]}</h2>
           <p className="dash__hero-sub">
@@ -147,18 +129,6 @@ export default function DashboardClient() {
       )}
 
       <style>{`
-        .dash { display: flex; flex-direction: column; min-height: 100vh; color: var(--cb-text); font-family: var(--font-inter); }
-        .dash__header { display: flex; align-items: center; justify-content: space-between; padding: 1.25rem 2rem; border-bottom: 1px solid var(--cb-border); background: var(--cb-surface); backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 10; }
-        .dash__header-left { display: flex; align-items: center; gap: .75rem; }
-        .dash__header-left h1 { font-size: 1.125rem; font-weight: 700; margin: 0; }
-        .dash__logo { width: 32px; height: 32px; flex-shrink: 0; }
-        .dash__logo svg { width: 100%; height: 100%; border-radius: 8px; }
-        .dash__header-right { display: flex; align-items: center; gap: 1rem; }
-        .dash__user { font-size: .875rem; color: var(--cb-text-muted); }
-        .dash__logout-btn { background: none; border: 1px solid var(--cb-border); color: var(--cb-text-muted); padding: .4rem .9rem; border-radius: 6px; cursor: pointer; transition: all .15s; font-size: .8125rem; }
-        .dash__logout-btn:hover { background: rgba(255,255,255,.05); color: var(--cb-text); }
-
-        .dash__content { flex: 1; padding: 2.5rem 2rem; max-width: 900px; margin: 0 auto; width: 100%; }
         .dash__hero { margin-bottom: 2.5rem; }
         .dash__hero h2 { font-size: 1.75rem; font-weight: 700; margin: 0 0 .5rem 0; }
         .dash__hero-sub { color: var(--cb-text-muted); font-size: 1rem; margin: 0; }

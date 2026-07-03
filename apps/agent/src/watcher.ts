@@ -77,7 +77,11 @@ export function watchStorage(
   };
 
   const watcher = chokidar.watch(storageDir, {
-    ignored: /(^|[\/\\])\../, // ignore dotfiles
+    ignored: (filePath) => {
+      const relPath = path.relative(storageDir, filePath);
+      const parts = relPath.split(path.sep);
+      return parts.some(part => part.startsWith('.') && part !== '.' && part !== '..');
+    },
     persistent: true,
     ignoreInitial: true,
   });

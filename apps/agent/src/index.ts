@@ -5,7 +5,7 @@ import path from "path";
 import os from "os";
 import { WebSocket } from "ws";
 import type { GatewayMessage } from "@cloudbox/shared-types";
-import { watchStorage } from "./watcher.js";
+import { watchStorage, scanDirectory } from "./watcher.js";
 
 const DOWNLOAD_CHUNK_SIZE = 64 * 1024; // 64 KB
 
@@ -196,10 +196,24 @@ program
                 stream.write(Buffer.from(msg.chunk, "base64"));
               }
               if (msg.final) {
-                stream.end();
-                activeUploads.delete(msg.requestId);
-                send(ws, { type: "UPLOAD_ACK", requestId: msg.requestId, success: true });
-                console.log(`[Agent] UPLOAD complete for requestId: ${msg.requestId}`);
+                stream.end(() => {
+                  activeUploads.delete(msg.requestId);
+                  send(ws, { type: "UPLOAD_ACK", requestId: msg.requestId, success: true });
+                  console.log(`[Agent] UPLOAD complete for requestId: ${msg.requestId}`);
+
+                  // Trigger manual metadata sync to ensure the DB has the fully written file info
+                  try {
+                    const storageDir = path.join(CONFIG_DIR, "storage");
+                    const files = scanDirectory(storageDir);
+                    send(ws, {
+                      type: "METADATA_SYNC",
+                      files,
+                    });
+                    console.log(`[Agent] Triggered manual sync for ${files.length} items after upload`);
+                  } catch (syncErr) {
+                    console.error("[Agent] Error during manual sync after upload:", syncErr);
+                  }
+                });
               }
               break;
             }

@@ -7,9 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function DashboardPage() {
-  return (
-    <main style={{ minHeight: "100vh", background: "var(--cb-bg)" }}>
-      <DashboardClient />
-    </main>
-  );
+  return <DashboardClient />;
 }
