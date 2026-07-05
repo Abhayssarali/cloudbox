@@ -196,3 +196,125 @@ adminRouter.post("/users/:id/quota", async (req: Request, res: Response) => {
     }
   }
 });
+
+// ---- POST /admin/users/:id/role ----
+// Change a user's role
+adminRouter.post("/users/:id/role", async (req: Request, res: Response) => {
+  try {
+    const userId = req.params["id"];
+    if (!userId) {
+      res.status(400).json({ success: false, error: "User ID is required" });
+      return;
+    }
+
+    const { role } = req.body as { role?: "USER" | "ADMIN" | "SUPER_ADMIN" };
+    if (!role || !["USER", "ADMIN", "SUPER_ADMIN"].includes(role)) {
+      res.status(400).json({ success: false, error: "Valid role is required" });
+      return;
+    }
+
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { role },
+      select: { id: true, email: true, role: true },
+    });
+
+    res.json({ success: true, data: { user } });
+  } catch (err: any) {
+    console.error("[AdminRoute] Error setting role for user:", err);
+    if (err.code === "P2025") {
+      res.status(404).json({ success: false, error: "User not found" });
+    } else {
+      res.status(500).json({ success: false, error: "Failed to set role" });
+    }
+  }
+});
+
+// ---- GET /admin/agents ----
+// List all agents with their status and owning user
+adminRouter.get("/agents", async (_req: Request, res: Response) => {
+  try {
+    const agents = await prisma.agent.findMany({
+      include: {
+        user: { select: { id: true, email: true } },
+        _count: { select: { files: true } },
+      },
+      orderBy: { lastHeartbeat: "desc" },
+    });
+
+    const formatted = agents.map((a) => ({
+      id: a.id,
+      cloudId: a.cloudId,
+      status: a.status,
+      lastHeartbeat: a.lastHeartbeat?.toISOString() ?? null,
+      version: a.version,
+      createdAt: a.createdAt.toISOString(),
+      user: a.user,
+      fileCount: a._count.files,
+    }));
+
+    res.json({ success: true, data: { agents: formatted } });
+  } catch (err) {
+    console.error("[AdminRoute] Error listing agents:", err);
+    res.status(500).json({ success: false, error: "Failed to list agents" });
+  }
+});
+
+// ---- GET /admin/stats ----
+// High-level platform stats
+adminRouter.get("/stats", async (_req: Request, res: Response) => {
+  try {
+    const [userCount, agentCount, onlineCount, fileCount, storageAgg] =
+      await Promise.all([
+        prisma.user.count(),
+        prisma.agent.count(),
+        prisma.agent.count({ where: { status: "ONLINE" } }),
+        prisma.file.count({ where: { isFolder: false } }),
+        prisma.user.aggregate({ _sum: { usedBytes: true } }),
+      ]);
+
+    res.json({
+      success: true,
+      data: {
+        userCount,
+        agentCount,
+        onlineAgentCount: onlineCount,
+        fileCount,
+        totalUsedBytes: (storageAgg._sum.usedBytes ?? 0n).toString(),
+      },
+    });
+  } catch (err) {
+    console.error("[AdminRoute] Error fetching stats:", err);
+    res.status(500).json({ success: false, error: "Failed to fetch stats" });
+  }
+});
+
+// ---- GET /admin/activity ----
+// Latest activity log entries
+adminRouter.get("/activity", async (req: Request, res: Response) => {
+  try {
+    const limit = Math.min(parseInt(String(req.query["limit"] ?? "50"), 10), 200);
+
+    const logs = await prisma.activityLog.findMany({
+      take: limit,
+      orderBy: { createdAt: "desc" },
+      include: {
+        user: { select: { email: true } },
+      },
+    });
+
+    const formatted = logs.map((l) => ({
+      id: l.id,
+      action: l.action,
+      userEmail: l.user?.email ?? null,
+      meta: l.meta ? (JSON.parse(l.meta) as unknown) : null,
+      createdAt: l.createdAt.toISOString(),
+    }));
+
+    res.json({ success: true, data: { logs: formatted } });
+  } catch (err) {
+    console.error("[AdminRoute] Error fetching activity logs:", err);
+    res.status(500).json({ success: false, error: "Failed to fetch activity logs" });
+  }
+});
+

@@ -5,7 +5,9 @@ import { prisma } from "../lib/prisma.js";
 import { passport } from "../lib/passport.js";
 import { setAuthCookies, clearAuthCookies, verifyRefreshToken, signAccessToken } from "../lib/jwt.js";
 import { requireAuth } from "../middleware/auth.js";
+import { logActivity } from "../lib/activityLog.js";
 import type { IRouter } from "express";
+
 
 export const authRouter: IRouter = Router();
 
@@ -53,6 +55,7 @@ authRouter.post("/signup", async (req, res) => {
   });
 
   setAuthCookies(res, user.id, user.role);
+  await logActivity("SIGNUP", { userId: user.id, meta: { email: user.email } });
 
   res.status(201).json({
     success: true,
@@ -89,6 +92,7 @@ authRouter.post("/login", async (req, res) => {
   }
 
   setAuthCookies(res, user.id, user.role);
+  await logActivity("LOGIN", { userId: user.id, meta: { email: user.email } });
 
   res.json({
     success: true,

@@ -175,8 +175,39 @@
 | React Query Integration | ✅ | Added `Providers` in `layout.tsx`. Implemented `useQuery` for fetching files and `useMutation` for uploading files, including automatic cache invalidation on success. |
 | Right Panel | ✅ | Added a slide-out details panel displaying file name, size, type, modified date, and storage node ID, along with a Download button. |
 
-## Phase 9 — Admin Dashboard ⏳ NOT STARTED
-## Phase 10 — Sharing ⏳ NOT STARTED
+## Phase 9 — Admin Dashboard ✅ COMPLETED
+
+### Implemented
+| Item | Status | Notes |
+|---|---|---|
+| ActivityLog DB model | ✅ | New `activity_logs` table with `userId`, `action`, `meta` (JSON string), migration applied. |
+| `activityLog.ts` helper | ✅ | `logActivity()` utility used throughout routes — non-fatal, never breaks primary flow. |
+| Auth logging | ✅ | `SIGNUP` and `LOGIN` events recorded in `auth.ts`. |
+| Upload logging | ✅ | `UPLOAD` event recorded after successful `UPLOAD_ACK` in `files.ts`. |
+| `GET /admin/agents` | ✅ | Lists all agents with owner email, status, heartbeat, file count. |
+| `GET /admin/stats` | ✅ | Returns user count, agent count (total + online), file count, total used bytes. |
+| `GET /admin/activity` | ✅ | Last N activity log entries (default 50, max 200). |
+| `POST /admin/users/:id/role` | ✅ | Set a user's role (USER/ADMIN/SUPER_ADMIN). |
+| Sidebar Admin link | ✅ | "Admin" nav item appears in sidebar only for ADMIN/SUPER_ADMIN roles. |
+| Admin sub-layout with tabs | ✅ | `/dashboard/admin` has a tabbed sub-layout (Overview, Users, Agents, Activity). |
+| Overview stats page | ✅ | 4-card grid (users, nodes, files, storage), quick agent status list. |
+| Users page | ✅ | Table with inline quota editor (GB input) and role selector per user. |
+| Agents health page | ✅ | Cards per agent showing status, last heartbeat, file count, version. Auto-refreshes every 15s. |
+| Activity log page | ✅ | Scrollable audit feed with color-coded action icons. Auto-refreshes every 15s. |
+
+## Phase 10 — Sharing ✅ COMPLETED
+
+### Implemented
+| Item | Status | Notes |
+|---|---|---|
+| ShareLink DB model | ✅ | Created table for link tokens, mapped relations to `File` (onDelete: Cascade). |
+| Creation & Revocation APIs | ✅ | `POST /sharing` (generates 16-byte hex secure token), `DELETE /sharing/:id` (revoke link). |
+| List Sharing API | ✅ | `GET /sharing` (returns active share links, name, size, type). |
+| Public APIs | ✅ | `GET /sharing/public/:token` (resolves metadata), `GET /sharing/public/:token/download` (initiates WebSocket chunk stream). |
+| UI Share trigger | ✅ | "Share File" button in details panel, showing copyable link dialog on success. |
+| Dashboard Shared page | ✅ | Managed list of links with file info, copy buttons, direct view button, and revocation buttons. |
+| Public Download page | ✅ | `/s/[token]` route with folder metadata display, dynamic file icons, and big download button with live Agent status check. |
+
 ## Phase 11 — Hardening & DevOps ⏳ NOT STARTED
 ## Phase 12 — Post-MVP Polish ⏳ NOT STARTED
 

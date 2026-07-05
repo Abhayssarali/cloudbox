@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { publishCommand } from "../lib/gatewayPublisher.js";
 import { requestRegistry } from "../lib/requestRegistry.js";
+import { logActivity } from "../lib/activityLog.js";
 import type { IRouter, Request, Response } from "express";
 import type { GatewayMessage } from "@cloudbox/shared-types";
 
@@ -252,6 +253,7 @@ filesRouter.post("/upload", requireAuth, async (req: Request, res: Response) => 
             where: { id: userId },
             data: { usedBytes: { increment: expectedSize } },
           });
+          await logActivity("UPLOAD", { userId, meta: { name: filename, path: targetPath, size: expectedSize } });
 
           if (!responded) {
             responded = true;

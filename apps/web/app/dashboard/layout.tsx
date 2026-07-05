@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FolderOpen, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, FolderOpen, Settings, LogOut, ShieldCheck, Share2 } from "lucide-react";
 import { useAuthStore } from "@/stores/useAuthStore";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -18,10 +18,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     window.location.href = "/login";
   }
 
+  const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
+
   const navItems = [
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
     { name: "My Files", href: "/dashboard/files", icon: FolderOpen },
+    { name: "Shared", href: "/dashboard/shared", icon: Share2 },
     { name: "Settings", href: "/dashboard/settings", icon: Settings },
+    ...(isAdmin ? [{ name: "Admin", href: "/dashboard/admin", icon: ShieldCheck }] : []),
   ];
 
   return (

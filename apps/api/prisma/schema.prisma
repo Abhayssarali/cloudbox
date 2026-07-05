@@ -23,6 +23,7 @@ model User {
   updatedAt    DateTime @updatedAt
   group        Group?   @relation(fields: [groupId], references: [id])
   agents       Agent[]
+  activityLogs ActivityLog[]
 
   @@map("users")
 }
@@ -43,19 +44,31 @@ model Agent {
 }
 
 model File {
-  id        String   @id @default(uuid())
-  agentId   String
-  path      String
-  name      String
-  size      BigInt
-  mimeType  String?
-  isFolder  Boolean  @default(false)
-  parentId  String?
-  updatedAt DateTime @updatedAt
-  agent     Agent    @relation(fields: [agentId], references: [id])
+  id         String      @id @default(uuid())
+  agentId    String
+  path       String
+  name       String
+  size       BigInt
+  mimeType   String?
+  isFolder   Boolean     @default(false)
+  parentId   String?
+  updatedAt  DateTime    @updatedAt
+  agent      Agent       @relation(fields: [agentId], references: [id])
+  shareLinks ShareLink[]
 
   @@unique([agentId, path])
   @@map("files")
+}
+
+model ShareLink {
+  id        String    @id @default(uuid())
+  fileId    String
+  token     String    @unique
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+  file      File      @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@map("share_links")
 }
 
 enum Role {
@@ -77,4 +90,15 @@ model Group {
   users       User[]
 
   @@map("groups")
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  action    String
+  meta      String?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("activity_logs")
 }

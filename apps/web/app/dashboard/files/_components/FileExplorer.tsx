@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   Folder, File as FileIcon, Upload, Download, 
   ChevronRight, HardDrive, FileImage, FileText, 
-  FileArchive, Loader2, Home 
+  FileArchive, Loader2, Home, Share2
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -26,8 +26,31 @@ type FileNode = {
 export default function FileExplorer() {
   const [currentFolder, setCurrentFolder] = useState("/");
   const [selectedFile, setSelectedFile] = useState<FileNode | null>(null);
+  const [createdShareLink, setCreatedShareLink] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
+
+  const shareMutation = useMutation({
+    mutationFn: async (fileId: string) => {
+      const res = await fetch(`${API_URL}/sharing`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileId }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+      return data.data.token as string;
+    },
+    onSuccess: (token) => {
+      // Construct public link based on current origin
+      const shareUrl = `${window.location.origin}/s/${token}`;
+      setCreatedShareLink(shareUrl);
+    },
+    onError: (err: Error) => {
+      alert(`Sharing failed: ${err.message}`);
+    },
+  });
 
   const { data: files = [], isLoading, error } = useQuery({
     queryKey: ["files", currentFolder],
@@ -233,13 +256,59 @@ export default function FileExplorer() {
               </div>
             </div>
 
-            <div className="mt-auto pt-6">
+             <div className="mt-auto pt-6 space-y-3">
               <button 
                 onClick={() => handleDownload(selectedFile)}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 text-white text-sm font-medium rounded-lg transition-colors border border-[#1f2229]"
               >
                 <Download className="w-4 h-4" />
                 Download File
+              </button>
+              <button 
+                onClick={() => shareMutation.mutate(selectedFile.id)}
+                disabled={shareMutation.isPending}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+              >
+                {shareMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
+                {shareMutation.isPending ? "Generating..." : "Share File"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share Link Modal */}
+      {createdShareLink && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3 className="text-lg font-bold text-white mb-2">Share Link Generated</h3>
+            <p className="text-sm text-gray-400 mb-4">Anyone with this link can view and download this file.</p>
+            <div className="flex items-center gap-2 bg-black border border-[#1f2229] p-2 rounded-lg mb-4">
+              <input 
+                type="text" 
+                readOnly 
+                value={createdShareLink}
+                className="flex-1 bg-transparent text-sm text-gray-200 focus:outline-none overflow-x-auto select-all"
+                id="share-link-input"
+              />
+              <button 
+                onClick={() => {
+                  const input = document.getElementById("share-link-input") as HTMLInputElement;
+                  input?.select();
+                  navigator.clipboard.writeText(createdShareLink);
+                  alert("Link copied to clipboard!");
+                }}
+                className="px-3 py-1 bg-indigo-500 hover:bg-indigo-600 text-xs font-semibold rounded text-white"
+              >
+                Copy
+              </button>
+            </div>
+            <div className="flex justify-end">
+              <button 
+                onClick={() => setCreatedShareLink(null)} 
+                className="px-4 py-2 bg-[#1f2229] hover:bg-white/10 text-sm font-medium rounded-lg transition-colors border border-[#1f2229] text-white"
+              >
+                Close
               </button>
             </div>
           </div>
