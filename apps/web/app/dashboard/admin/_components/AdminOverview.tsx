@@ -13,6 +13,22 @@ type Stats = {
   totalUsedBytes: string;
 };
 
+type AgentSummary = {
+  id: string;
+  cloudId: string;
+  status: "ONLINE" | "OFFLINE";
+  fileCount: number;
+  user: {
+    email: string;
+  };
+};
+
+type ApiResponse<T> = {
+  success: boolean;
+  data: T;
+  error?: string;
+};
+
 function formatBytes(bytesStr: string) {
   const bytes = parseInt(bytesStr, 10);
   if (!bytes) return "0 B";
@@ -27,7 +43,7 @@ export default function AdminOverview() {
     queryKey: ["admin", "stats"],
     queryFn: async () => {
       const res = await fetch(`${API_URL}/admin/stats`, { credentials: "include" });
-      const data = await res.json();
+      const data = (await res.json()) as ApiResponse<Stats>;
       if (!data.success) throw new Error(data.error);
       return data.data;
     },
@@ -116,11 +132,11 @@ export default function AdminOverview() {
 }
 
 function AgentQuickStatus() {
-  const { data: agents = [], isLoading } = useQuery<any[]>({
+  const { data: agents = [], isLoading } = useQuery<AgentSummary[]>({
     queryKey: ["admin", "agents"],
     queryFn: async () => {
       const res = await fetch(`${API_URL}/admin/agents`, { credentials: "include" });
-      const data = await res.json();
+      const data = (await res.json()) as ApiResponse<{ agents: AgentSummary[] }>;
       if (!data.success) throw new Error(data.error);
       return data.data.agents;
     },
@@ -138,7 +154,7 @@ function AgentQuickStatus() {
         <p className="text-gray-500 text-sm">No storage nodes registered.</p>
       ) : (
         <div className="space-y-2">
-          {agents.map((agent: any) => (
+          {agents.map((agent) => (
             <div
               key={agent.id}
               className="bg-[#12141a] border border-[#1f2229] rounded-lg px-4 py-3 flex items-center justify-between"

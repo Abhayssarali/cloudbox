@@ -351,6 +351,8 @@ Agents authenticate to the Gateway using a signed challenge (not just sending th
 4. Grafana dashboards + Loki/Promtail log aggregation.
 5. GitHub Actions: build → test → deploy on merge to main.
 
+**Implementation status:** completed in the repo on 2026-07-07 with production Dockerfiles, root-context Compose builds, Gateway/API Prometheus metrics, Nginx/TLS template config, observability profile configs, an Ubuntu agent installer, and guarded GitHub Actions deploy scaffolding.
+
 ## Phase 12 — Post-MVP Polish
 - File versioning
 - Thumbnails/previews (BullMQ job)

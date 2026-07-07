@@ -1,10 +1,15 @@
 import { Router } from "express";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { requireRole } from "../middleware/requireRole.js";
 import type { IRouter, Request, Response } from "express";
 
 export const adminRouter: IRouter = Router();
+
+function isKnownPrismaError(err: unknown): err is Prisma.PrismaClientKnownRequestError {
+  return err instanceof Prisma.PrismaClientKnownRequestError;
+}
 
 // Apply authentication and role authorization to all routes in this router
 adminRouter.use(requireAuth);
@@ -77,9 +82,9 @@ adminRouter.post("/groups", async (req: Request, res: Response) => {
     });
 
     res.status(201).json({ success: true, data: { group } });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[AdminRoute] Error creating group:", err);
-    if (err.code === "P2002") {
+    if (isKnownPrismaError(err) && err.code === "P2002") {
       res.status(409).json({ success: false, error: "Group name already exists" });
     } else {
       res.status(500).json({ success: false, error: "Failed to create group" });
@@ -109,9 +114,9 @@ adminRouter.delete("/groups/:id", async (req: Request, res: Response) => {
     });
 
     res.json({ success: true, data: { message: "Group deleted" } });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[AdminRoute] Error deleting group:", err);
-    if (err.code === "P2025") {
+    if (isKnownPrismaError(err) && err.code === "P2025") {
       res.status(404).json({ success: false, error: "Group not found" });
     } else {
       res.status(500).json({ success: false, error: "Failed to delete group" });
@@ -139,9 +144,9 @@ adminRouter.post("/users/:id/group", async (req: Request, res: Response) => {
     });
 
     res.json({ success: true, data: { user } });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[AdminRoute] Error assigning group to user:", err);
-    if (err.code === "P2025") {
+    if (isKnownPrismaError(err) && err.code === "P2025") {
       res.status(404).json({ success: false, error: "User not found" });
     } else {
       res.status(500).json({ success: false, error: "Failed to assign group" });
@@ -187,9 +192,9 @@ adminRouter.post("/users/:id/quota", async (req: Request, res: Response) => {
         user: { ...user, quotaBytes: user.quotaBytes.toString() },
       },
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[AdminRoute] Error setting quota for user:", err);
-    if (err.code === "P2025") {
+    if (isKnownPrismaError(err) && err.code === "P2025") {
       res.status(404).json({ success: false, error: "User not found" });
     } else {
       res.status(500).json({ success: false, error: "Failed to set quota" });
@@ -220,9 +225,9 @@ adminRouter.post("/users/:id/role", async (req: Request, res: Response) => {
     });
 
     res.json({ success: true, data: { user } });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[AdminRoute] Error setting role for user:", err);
-    if (err.code === "P2025") {
+    if (isKnownPrismaError(err) && err.code === "P2025") {
       res.status(404).json({ success: false, error: "User not found" });
     } else {
       res.status(500).json({ success: false, error: "Failed to set role" });

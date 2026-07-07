@@ -1,6 +1,7 @@
 import type { GatewayMessage } from "@cloudbox/shared-types";
 import { pubClient, subClient } from "./lib/redis.js";
 import { getSocket } from "./registry.js";
+import { recordRelayCommand, recordRelayError, recordRelayResponse } from "./metrics.js";
 
 // Channel names
 const CMD_CHANNEL = "gateway:commands";    // API → Gateway → Agent
@@ -24,15 +25,18 @@ export async function startRelaySubscriber() {
         cloudId: string;
         message: GatewayMessage;
       };
+      recordRelayCommand(message);
 
       const entry = getSocket(cloudId);
       if (!entry) {
         console.warn(`[Relay] No active socket for cloudId=${cloudId}`);
+        recordRelayError();
         return;
       }
 
       entry.ws.send(JSON.stringify(message));
     } catch (err) {
+      recordRelayError();
       console.error("[Relay] Error routing command:", err);
     }
   });
@@ -43,5 +47,6 @@ export async function startRelaySubscriber() {
  * Publishes the response to Redis so the API can pick it up.
  */
 export async function publishResponse(cloudId: string, message: GatewayMessage) {
+  recordRelayResponse(message);
   await pubClient.publish(RESP_CHANNEL, JSON.stringify({ cloudId, message }));
 }

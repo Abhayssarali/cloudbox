@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuthStore } from "@/stores/useAuthStore";
+import type { AuthState } from "@/stores/useAuthStore";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -13,9 +14,14 @@ interface AgentRecord {
   createdAt: string;
 }
 
+interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  error?: string;
+}
+
 export default function DashboardClient() {
-  const user = useAuthStore((s: import("@/stores/useAuthStore").AuthState) => s.user);
-  const clearUser = useAuthStore((s: import("@/stores/useAuthStore").AuthState) => s.clearUser);
+  const user = useAuthStore((s: AuthState) => s.user);
   const [agents, setAgents] = useState<AgentRecord[]>([]);
   const [claimCode, setClaimCode] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -24,7 +30,7 @@ export default function DashboardClient() {
   const fetchAgents = useCallback(async () => {
     try {
       const res = await fetch(`${API_URL}/agents`, { credentials: "include" });
-      const data = await res.json() as any;
+      const data = (await res.json()) as ApiResponse<{ agents: AgentRecord[] }>;
       if (data.success) setAgents(data.data.agents);
     } catch {
       // silently fail on polling error
@@ -33,27 +39,24 @@ export default function DashboardClient() {
 
   // Poll every 10 seconds for live status
   useEffect(() => {
-    fetchAgents();
+    const initialFetch = setTimeout(fetchAgents, 0);
     const interval = setInterval(fetchAgents, 10_000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(initialFetch);
+      clearInterval(interval);
+    };
   }, [fetchAgents]);
-
-  async function handleLogout() {
-    await fetch(`${API_URL}/auth/logout`, { method: "POST", credentials: "include" });
-    clearUser();
-    window.location.href = "/login";
-  }
 
   async function handleClaimNode() {
     setIsLoading(true);
     setError(null);
     try {
       const res = await fetch(`${API_URL}/agents/claim`, { method: "POST", credentials: "include" });
-      const data = await res.json() as any;
+      const data = (await res.json()) as ApiResponse<{ code: string }>;
       if (!res.ok || !data.success) throw new Error(data.error || "Failed to get claim code");
       setClaimCode(data.data.code);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsLoading(false);
     }

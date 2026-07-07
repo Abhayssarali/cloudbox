@@ -208,7 +208,20 @@
 | Dashboard Shared page | ✅ | Managed list of links with file info, copy buttons, direct view button, and revocation buttons. |
 | Public Download page | ✅ | `/s/[token]` route with folder metadata display, dynamic file icons, and big download button with live Agent status check. |
 
-## Phase 11 — Hardening & DevOps ⏳ NOT STARTED
+## Phase 11 — Hardening & DevOps ✅ COMPLETED
+
+### Implemented
+| Item | Status | Notes |
+|---|---|---|
+| Production Dockerfiles | ✅ | Added root-context Dockerfiles for API, Gateway, and Web so workspace packages and `pnpm-lock.yaml` are available during image builds. |
+| Compose hardening | ✅ | `docker-compose.yml` now runs Postgres, Redis, API, Gateway, and Web; optional `observability` profile adds Prometheus, Grafana, Loki, and Promtail. |
+| Agent installer | ✅ | Added `scripts/install-agent.sh` for Ubuntu installs and updated the systemd service template with production API/Gateway URLs. |
+| Nginx + TLS config | ✅ | Added `deploy/nginx/cloudbox.conf` with HTTP-to-HTTPS redirects, API/Web proxying, and WebSocket upgrade support for `gateway.cloudbox.com`. |
+| Prometheus metrics | ✅ | API exposes `/metrics` for request counts, active requests, errors, and latency totals; Gateway exposes `/metrics` for connected agents, relay counts, active transfers, and transfer timing. |
+| Grafana/Loki/Promtail | ✅ | Added datasource provisioning plus Loki and Promtail configs for CloudBox container logs. |
+| GitHub Actions | ✅ | CI now installs, builds shared packages, typechecks, lints, builds all packages, builds Docker images, and conditionally deploys on pushes to `main` when deploy secrets are configured. |
+| Local startup docs | ✅ | `start.bat`, `README.md`, and `HOW_TO_RUN.md` updated with Gateway metrics and observability commands. |
+
 ## Phase 12 — Post-MVP Polish ⏳ NOT STARTED
 
 ---
@@ -226,3 +239,8 @@
 | 2026-07-02 | 1 | Fixed TS2742 portability errors in `app.ts` and `health.ts` |
 | 2026-07-02 | 1 | Removed deprecated `version:` key from docker-compose.yml |
 | 2026-07-02 | 1 | All packages typecheck clean ✅ |
+| 2026-07-07 | 11 | Added production Dockerfiles for API, Gateway, and Web; fixed compose build context for workspace packages. |
+| 2026-07-07 | 11 | Added Gateway `/health` and Prometheus `/metrics`; added API `/metrics` middleware/route. |
+| 2026-07-07 | 11 | Added Prometheus, Grafana, Loki, Promtail, and Nginx deployment configs. |
+| 2026-07-07 | 11 | Added Ubuntu agent installer script and refreshed systemd environment URLs. |
+| 2026-07-07 | 11 | Expanded GitHub Actions to build, lint, typecheck, Docker-build, and conditionally deploy on `main`. |

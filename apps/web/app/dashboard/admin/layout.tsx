@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/useAuthStore";
+import type { AuthState } from "@/stores/useAuthStore";
 import { useEffect } from "react";
 import { Users, Server, Activity, BarChart3 } from "lucide-react";
 
@@ -16,7 +17,7 @@ const adminTabs = [
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const user = useAuthStore((s: any) => s.user);
+  const user = useAuthStore((s: AuthState) => s.user);
 
   useEffect(() => {
     if (user && user.role !== "ADMIN" && user.role !== "SUPER_ADMIN") {

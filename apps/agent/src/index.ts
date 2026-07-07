@@ -21,6 +21,18 @@ interface AgentConfig {
   agentId: string;
 }
 
+interface RegisterResponse {
+  success: boolean;
+  error?: string;
+  data?: {
+    agentId: string;
+  };
+}
+
+function getErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 function loadConfig(): AgentConfig {
   if (!fs.existsSync(CONFIG_FILE)) {
     console.error("[Error] Agent is not registered. Run: cloudbox-agent register <code>");
@@ -71,8 +83,8 @@ program
         body: JSON.stringify({ claimCode: code, cloudId, publicKey }),
       });
 
-      const data = await res.json() as any;
-      if (!res.ok || !data.success) throw new Error(data.error || "Registration failed");
+      const data = (await res.json()) as RegisterResponse;
+      if (!res.ok || !data.success || !data.data) throw new Error(data.error || "Registration failed");
 
       console.log("[CloudBox] API Registration successful!");
 
@@ -83,8 +95,8 @@ program
 
       console.log(`[CloudBox] Configuration saved securely to ${CONFIG_FILE}`);
       console.log("[CloudBox] Done! Run: cloudbox-agent start");
-    } catch (err: any) {
-      console.error(`[Error] ${err.message}`);
+    } catch (err: unknown) {
+      console.error(`[Error] ${getErrorMessage(err)}`);
       process.exit(1);
     }
   });
@@ -124,7 +136,7 @@ program
               break;
             }
 
-            case "AUTH_OK":
+            case "AUTH_OK": {
               console.log("[Agent] ✅ Authenticated! Agent is now ONLINE.");
               
               if (activeWatcher) {
@@ -139,6 +151,7 @@ program
                 });
               });
               break;
+            }
 
             case "AUTH_ERROR":
               console.error(`[Agent] Auth failed: ${msg.message}`);

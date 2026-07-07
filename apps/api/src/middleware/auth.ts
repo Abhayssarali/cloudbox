@@ -4,6 +4,7 @@ import type { AuthTokenPayload } from "@cloudbox/shared-types";
 
 // Augment Express to carry authenticated user info
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface User {
       id: string;

@@ -25,8 +25,10 @@ echo [4/5] Running Database Migrations...
 call pnpm --filter api run prisma:migrate
 echo.
 
-echo [5/5] Starting Development Servers (Frontend, API, etc)...
+echo [5/5] Starting Development Servers (Frontend, API, Gateway, etc)...
 echo You can access the Web UI at http://localhost:3000
 echo You can access the API at http://localhost:4000
+echo You can access the Gateway health endpoint at http://localhost:4001/health
+echo Prometheus metrics: API http://localhost:4000/metrics, Gateway http://localhost:4001/metrics
 echo.
 call pnpm dev

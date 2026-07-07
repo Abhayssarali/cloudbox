@@ -7,8 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  lint-and-typecheck:
-    name: Lint & Typecheck
+  verify:
+    name: Build, Lint & Typecheck
     runs-on: ubuntu-latest
 
     steps:
@@ -29,7 +29,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build shared-types
+      - name: Build shared packages
         run: pnpm --filter @cloudbox/shared-types build
 
       - name: Typecheck all packages
@@ -37,3 +37,67 @@ jobs:
 
       - name: Lint all packages
         run: pnpm -r lint
+
+      - name: Build all packages
+        run: pnpm -r build
+
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: verify
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build production images
+        run: docker compose build api gateway web
+
+  deploy:
+    name: Deploy on Main
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check deploy secrets
+        id: deploy_secrets
+        run: |
+          if [ -n "${{ secrets.DEPLOY_HOST }}" ] && [ -n "${{ secrets.DEPLOY_USER }}" ] && [ -n "${{ secrets.DEPLOY_SSH_KEY }}" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure SSH
+        if: steps.deploy_secrets.outputs.enabled == 'true'
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/cloudbox_deploy_key
+          chmod 600 ~/.ssh/cloudbox_deploy_key
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Sync release to server
+        if: steps.deploy_secrets.outputs.enabled == 'true'
+        run: |
+          rsync -az --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude '.next' \
+            --exclude 'dist' \
+            -e "ssh -i ~/.ssh/cloudbox_deploy_key" \
+            ./ "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH || '/opt/cloudbox' }}/"
+
+      - name: Restart production stack
+        if: steps.deploy_secrets.outputs.enabled == 'true'
+        run: |
+          ssh -i ~/.ssh/cloudbox_deploy_key "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "cd '${{ secrets.DEPLOY_PATH || '/opt/cloudbox' }}' && docker compose up -d --build api gateway web"
+
+      - name: Skip deploy
+        if: steps.deploy_secrets.outputs.enabled != 'true'
+        run: echo "Deploy secrets are not configured; build verification completed without deployment."

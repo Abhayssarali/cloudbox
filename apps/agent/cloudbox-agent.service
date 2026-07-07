@@ -1,6 +1,7 @@
 [Unit]
 Description=CloudBox Agent Service
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
@@ -13,8 +14,9 @@ RestartSec=5
 # Adjust user as needed
 User=root
 Environment=NODE_ENV=production
-# Update API_URL to match your backend's actual domain
-Environment=API_URL=https://api.yourcloudboxdomain.com
+# Update URLs to match your deployed CloudBox domains
+Environment=API_URL=https://cloudbox.com/api
+Environment=GATEWAY_URL=wss://gateway.cloudbox.com
 
 [Install]
 WantedBy=multi-user.target

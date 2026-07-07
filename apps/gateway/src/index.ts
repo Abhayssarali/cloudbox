@@ -1,12 +1,14 @@
 import "dotenv/config";
+import http from "http";
 import { WebSocketServer } from "ws";
 import type { GatewayMessage } from "@cloudbox/shared-types";
 import { connectRedis } from "./lib/redis.js";
 import { runAuthHandshake } from "./auth.js";
 import { startHeartbeat } from "./heartbeat.js";
 import { startRelaySubscriber, publishResponse } from "./relay.js";
-import { unregisterSocket, updateLastPong, getSocket } from "./registry.js";
+import { unregisterSocket, updateLastPong, getSocket, getAllEntries } from "./registry.js";
 import { prisma } from "./lib/prisma.js";
+import { renderMetrics } from "./metrics.js";
 
 const PORT = Number(process.env.GATEWAY_PORT ?? 4001);
 
@@ -20,9 +22,28 @@ async function main() {
   // Start heartbeat manager
   startHeartbeat();
 
+  const server = http.createServer((req, res) => {
+    if (req.url === "/health") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ status: "ok", timestamp: new Date().toISOString() }));
+      return;
+    }
+
+    if (req.url === "/metrics") {
+      res.writeHead(200, { "Content-Type": "text/plain; version=0.0.4; charset=utf-8" });
+      res.end(renderMetrics(getAllEntries().size));
+      return;
+    }
+
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ success: false, error: "Route not found" }));
+  });
+
   // Start WebSocket server
-  const wss = new WebSocketServer({ port: PORT });
-  console.log(`[Gateway] WebSocket server listening on ws://localhost:${PORT}`);
+  const wss = new WebSocketServer({ server });
+  server.listen(PORT, () => {
+    console.log(`[Gateway] WebSocket server listening on ws://localhost:${PORT}`);
+  });
 
   wss.on("connection", async (ws) => {
     console.log("[Gateway] New connection — starting auth handshake...");
@@ -87,8 +108,9 @@ async function main() {
   // Graceful shutdown
   process.on("SIGTERM", () => {
     console.log("[Gateway] SIGTERM received — shutting down...");
-    wss.close();
-    process.exit(0);
+    wss.close(() => {
+      server.close(() => process.exit(0));
+    });
   });
 }
 

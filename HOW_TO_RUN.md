@@ -47,6 +47,9 @@ pnpm dev
 - **Web App (Frontend)**: [http://localhost:3000](http://localhost:3000)
 - **API Server (Backend)**: [http://localhost:4000](http://localhost:4000)
 - **Gateway Server (WebSocket)**: [ws://localhost:4001](ws://localhost:4001)
+- **Gateway Health**: [http://localhost:4001/health](http://localhost:4001/health)
+- **API Metrics**: [http://localhost:4000/metrics](http://localhost:4000/metrics)
+- **Gateway Metrics**: [http://localhost:4001/metrics](http://localhost:4001/metrics)
 
 ## 6. Start the Agent
 To start your storage node Agent, open a new terminal and run:
@@ -59,3 +62,25 @@ pnpm --filter agent run dev start
 1. Add some files/directories inside the agent's storage folder (`~/.cloudbox/storage`).
 2. The agent automatically detects changes via `chokidar` and reconciles metadata with the backend.
 3. Verify by making an authorized request to `/files?folder=/` or checking the dashboard.
+
+## 8. Running the Docker Stack
+To run the production-style containers locally:
+```bash
+docker compose up -d --build
+```
+
+To include Prometheus, Grafana, Loki, and Promtail:
+```bash
+docker compose --profile observability up -d --build
+```
+
+Observability endpoints:
+- Prometheus: [http://localhost:9090](http://localhost:9090)
+- Grafana: [http://localhost:3001](http://localhost:3001) (`admin` / `cloudbox` by default)
+- Loki: [http://localhost:3100](http://localhost:3100)
+
+## 9. Production Deployment Notes
+- Use `deploy/nginx/cloudbox.conf` as the Nginx reverse proxy template for `cloudbox.com` and `gateway.cloudbox.com`.
+- Issue certificates with Certbot/Let's Encrypt, then mount them at the paths referenced in the Nginx config.
+- Configure GitHub Actions deploy secrets (`DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, optional `DEPLOY_PATH`) to enable deploy-on-main.
+- On Ubuntu storage nodes, run `scripts/install-agent.sh` from a checked-out release to install the agent and systemd service.

@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
-import type { AuthTokenPayload } from "@cloudbox/shared-types";
+import type { Response } from "express";
+import type { AuthTokenPayload, Role } from "@cloudbox/shared-types";
 
 const JWT_SECRET = process.env["JWT_SECRET"] ?? "dev-secret";
 const JWT_REFRESH_SECRET = process.env["JWT_REFRESH_SECRET"] ?? "dev-refresh-secret";
@@ -28,9 +29,9 @@ export function verifyRefreshToken(token: string): AuthTokenPayload {
 
 /** Set both access + refresh tokens as httpOnly cookies on the response */
 export function setAuthCookies(
-  res: import("express").Response,
+  res: Response,
   userId: string,
-  role: import("@cloudbox/shared-types").Role
+  role: Role
 ): void {
   const accessToken = signAccessToken({ userId, role });
   const refreshToken = signRefreshToken({ userId, role });
@@ -54,7 +55,7 @@ export function setAuthCookies(
 }
 
 /** Clear both auth cookies */
-export function clearAuthCookies(res: import("express").Response): void {
+export function clearAuthCookies(res: Response): void {
   const isProd = process.env["NODE_ENV"] === "production";
   const opts = { httpOnly: true, secure: isProd, sameSite: isProd ? ("none" as const) : ("lax" as const) };
   res.clearCookie("cb_access", opts);

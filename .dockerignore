@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+**/.next
+**/.env
+.git
+.github
+deploy/grafana/data
+deploy/loki/data
+pnpm-store

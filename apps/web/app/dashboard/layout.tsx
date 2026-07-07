@@ -4,13 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, FolderOpen, Settings, LogOut, ShieldCheck, Share2 } from "lucide-react";
 import { useAuthStore } from "@/stores/useAuthStore";
+import type { AuthState } from "@/stores/useAuthStore";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const user = useAuthStore((s: any) => s.user);
-  const clearUser = useAuthStore((s: any) => s.clearUser);
+  const user = useAuthStore((s: AuthState) => s.user);
+  const clearUser = useAuthStore((s: AuthState) => s.clearUser);
 
   async function handleLogout() {
     await fetch(`${API_URL}/auth/logout`, { method: "POST", credentials: "include" });
