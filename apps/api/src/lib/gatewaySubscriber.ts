@@ -1,6 +1,7 @@
 import { Redis } from "ioredis";
 import { prisma } from "./prisma.js";
 import { requestRegistry } from "./requestRegistry.js";
+import { sendMail } from "./mailer.js";
 
 const REDIS_URL = process.env["REDIS_URL"] ?? "redis://localhost:6379";
 const RESP_CHANNEL = "gateway:responses";
@@ -166,7 +167,12 @@ export async function initGatewaySubscriber() {
       };
 
       // Route transfer messages to waiting HTTP handlers
-      if (message.type === "FILE_CHUNK" || message.type === "UPLOAD_ACK" || message.type === "ERROR") {
+      if (
+        message.type === "FILE_CHUNK" ||
+        message.type === "UPLOAD_ACK" ||
+        message.type === "DELETE_ACK" ||
+        message.type === "ERROR"
+      ) {
         const requestId = (message as unknown as { requestId: string }).requestId;
         if (requestId) {
           requestRegistry.emit(requestId, message);
@@ -178,6 +184,7 @@ export async function initGatewaySubscriber() {
         // Find agent in DB
         const agent = await prisma.agent.findUnique({
           where: { cloudId },
+          include: { user: { select: { email: true } } },
         });
 
         if (!agent) {
@@ -187,6 +194,29 @@ export async function initGatewaySubscriber() {
 
         console.log(`[GatewaySubscriber] Received METADATA_SYNC for agent ${agent.id} (cloudId: ${cloudId})`);
         await syncAgentFiles(agent.id, message.files);
+      }
+
+      // Agent offline notification
+      if ((message as unknown as { type: string; event?: string }).event === "AGENT_OFFLINE") {
+        const agent = await prisma.agent.findUnique({
+          where: { cloudId },
+          include: { user: { select: { email: true } } },
+        });
+        if (agent?.user?.email) {
+          await sendMail(
+            agent.user.email,
+            "CloudBox: Your storage node went offline",
+            `
+              <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+                <h2 style="color:#6366f1">Storage Node Offline</h2>
+                <p>Your CloudBox storage node <strong>${cloudId.substring(0, 8)}…</strong> has gone offline.</p>
+                <p>Files stored on this node will be unavailable until the node reconnects.</p>
+                <p>To reconnect, ensure the agent is running on your machine: <code>cloudbox-agent start</code></p>
+                <p><a href="${process.env["CORS_ORIGIN"] ?? "http://localhost:3000"}/dashboard">View Dashboard</a></p>
+              </div>
+            `
+          );
+        }
       }
     } catch (err) {
       console.error("[GatewaySubscriber] Error processing message:", err);

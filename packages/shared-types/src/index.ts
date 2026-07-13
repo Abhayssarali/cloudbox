@@ -68,6 +68,8 @@ export type GatewayMessage =
   | { type: "FILE_CHUNK"; requestId: string; chunk: string; final: boolean }
   | { type: "UPLOAD_FILE"; path: string; requestId: string }
   | { type: "UPLOAD_ACK"; requestId: string; success: boolean }
+  | { type: "DELETE_FILE"; path: string; requestId: string }
+  | { type: "DELETE_ACK"; requestId: string; success: boolean }
   | { type: "HEARTBEAT"; agentId: string; timestamp: number }
   | { type: "HEARTBEAT_ACK"; timestamp: number }
   | { type: "AUTH_CHALLENGE"; challenge: string }

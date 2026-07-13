@@ -27,6 +27,9 @@ export default function LoginForm() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [step, setStep] = useState<"login" | "totp">("login");
+  const [tempToken, setTempToken] = useState<string>("");
+  const [totpCode, setTotpCode] = useState("");
 
   function validate(): FormErrors {
     const errs: FormErrors = {};
@@ -50,9 +53,45 @@ export default function LoginForm() {
         credentials: "include",
         body: JSON.stringify({ email: form.email, password: form.password }),
       });
-      const data = await res.json() as { success: boolean; error?: string; data?: { user: { id: string; email: string; role: "SUPER_ADMIN" | "ADMIN" | "USER" } } };
+      const data = await res.json() as { success: boolean; error?: string; data?: { requiresTotp?: boolean; tempToken?: string; user?: { id: string; email: string; role: "SUPER_ADMIN" | "ADMIN" | "USER" } } };
       if (!res.ok || !data.success) {
         setErrors({ general: data.error ?? "Invalid credentials" });
+        return;
+      }
+      
+      if (data.data?.requiresTotp && data.data.tempToken) {
+        setTempToken(data.data.tempToken);
+        setStep("totp");
+        return;
+      }
+
+      if (data.data?.user) setUser(data.data.user);
+      window.location.href = "/dashboard";
+    } catch {
+      setErrors({ general: "Network error — check your connection and try again." });
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleTotpSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!totpCode || totpCode.length !== 6) {
+      setErrors({ general: "Enter a valid 6-digit code" });
+      return;
+    }
+    setErrors({});
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/auth/login/totp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ tempToken, code: totpCode }),
+      });
+      const data = await res.json() as { success: boolean; error?: string; data?: { user: { id: string; email: string; role: "SUPER_ADMIN" | "ADMIN" | "USER" } } };
+      if (!res.ok || !data.success) {
+        setErrors({ general: data.error ?? "Invalid or expired code" });
         return;
       }
       if (data.data?.user) setUser(data.data.user);
@@ -62,6 +101,45 @@ export default function LoginForm() {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  if (step === "totp") {
+    return (
+      <form onSubmit={handleTotpSubmit} noValidate id="totp-form" className="lf">
+        {errors.general && (
+          <div className="lf__error-banner" role="alert">
+            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" /></svg>
+            {errors.general}
+          </div>
+        )}
+        <div className="lf__group text-center mb-2">
+          <h3 style={{ color: "var(--cb-text)", fontSize: "1.2rem", fontWeight: 600 }}>Two-Factor Authentication</h3>
+          <p style={{ color: "var(--cb-text-subtle)", fontSize: "0.9rem", marginTop: "0.25rem" }}>Enter the 6-digit code from your authenticator app.</p>
+        </div>
+        <div className="lf__group">
+          <input
+            type="text"
+            value={totpCode}
+            onChange={(e) => { setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setErrors({}); }}
+            className="lf__input text-center text-xl tracking-widest"
+            placeholder="000000"
+            disabled={isLoading}
+            autoFocus
+          />
+        </div>
+        <button type="submit" className="lf__submit" disabled={isLoading || totpCode.length !== 6}>
+          {isLoading ? <><span className="lf__spinner" aria-hidden="true" />Verifying…</> : "Verify Code"}
+        </button>
+        <button
+          type="button"
+          className="lf__google-btn"
+          style={{ border: "none", background: "none", marginTop: "-0.5rem" }}
+          onClick={() => setStep("login")}
+        >
+          Cancel
+        </button>
+      </form>
+    );
   }
 
   return (

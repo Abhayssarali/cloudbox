@@ -1,7 +1,8 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { Loader2, Wifi, WifiOff, HardDrive, FileText, Clock } from "lucide-react";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Loader2, Wifi, WifiOff, HardDrive, FileText, Clock, Users, UserCheck, ChevronDown } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -14,7 +15,12 @@ type Agent = {
   createdAt: string;
   user: { id: string; email: string };
   fileCount: number;
+  allocatedUser: { id: string; email: string } | null;
+  allocatedGroup: { id: string; name: string } | null;
 };
+
+type AdminUser = { id: string; email: string };
+type Group = { id: string; name: string };
 
 function timeAgo(iso: string | null): string {
   if (!iso) return "Never";
@@ -28,8 +34,113 @@ function timeAgo(iso: string | null): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+// ---- Allocation Selector ----
+function AllocationSelector({ agent, users, groups }: { agent: Agent; users: AdminUser[]; groups: Group[] }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+
+  const allocateMutation = useMutation({
+    mutationFn: async ({ userId, groupId }: { userId?: string | null; groupId?: string | null }) => {
+      const res = await fetch(`${API_URL}/admin/agents/${agent.id}/allocate`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: userId ?? null, groupId: groupId ?? null }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "agents"] });
+      setOpen(false);
+    },
+    onError: (e: Error) => alert(`Failed: ${e.message}`),
+  });
+
+  const currentLabel = agent.allocatedGroup
+    ? `Group: ${agent.allocatedGroup.name}`
+    : agent.allocatedUser
+    ? `User: ${agent.allocatedUser.email.split("@")[0]}`
+    : "Not allocated";
+
+  return (
+    <div className="relative mt-3">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-black/20 hover:bg-white/5 border border-[#2a2d38] rounded-lg text-xs text-gray-300 transition-colors"
+      >
+        <div className="flex items-center gap-2 truncate">
+          {agent.allocatedGroup ? (
+            <Users className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+          ) : agent.allocatedUser ? (
+            <UserCheck className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+          ) : (
+            <HardDrive className="w-3.5 h-3.5 text-gray-600 shrink-0" />
+          )}
+          <span className="truncate">{currentLabel}</span>
+        </div>
+        <ChevronDown className="w-3 h-3 text-gray-500 shrink-0" />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 top-10 z-20 bg-[#12141a] border border-[#1f2229] rounded-xl shadow-2xl py-1 max-h-64 overflow-y-auto">
+          {/* Clear allocation */}
+          <button
+            onClick={() => allocateMutation.mutate({ userId: null, groupId: null })}
+            className="w-full text-left px-4 py-2.5 text-xs text-gray-400 hover:bg-white/5 transition-colors border-b border-[#1f2229]"
+          >
+            — Clear allocation (owner only)
+          </button>
+
+          {/* Groups */}
+          {groups.length > 0 && (
+            <>
+              <div className="px-4 pt-2.5 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-600">Groups</div>
+              {groups.map((g) => (
+                <button
+                  key={g.id}
+                  onClick={() => allocateMutation.mutate({ groupId: g.id, userId: null })}
+                  className={`w-full text-left px-4 py-2.5 text-xs hover:bg-white/5 transition-colors flex items-center gap-2 ${agent.allocatedGroup?.id === g.id ? "text-violet-400" : "text-gray-300"}`}
+                >
+                  <Users className="w-3.5 h-3.5 shrink-0" />
+                  {g.name}
+                  {agent.allocatedGroup?.id === g.id && <span className="ml-auto text-[10px] text-violet-400">active</span>}
+                </button>
+              ))}
+            </>
+          )}
+
+          {/* Users */}
+          {users.length > 0 && (
+            <>
+              <div className="px-4 pt-2.5 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-600 border-t border-[#1f2229] mt-1">Users</div>
+              {users.map((u) => (
+                <button
+                  key={u.id}
+                  onClick={() => allocateMutation.mutate({ userId: u.id, groupId: null })}
+                  className={`w-full text-left px-4 py-2.5 text-xs hover:bg-white/5 transition-colors flex items-center gap-2 ${agent.allocatedUser?.id === u.id ? "text-indigo-400" : "text-gray-300"}`}
+                >
+                  <UserCheck className="w-3.5 h-3.5 shrink-0" />
+                  {u.email}
+                  {agent.allocatedUser?.id === u.id && <span className="ml-auto text-[10px] text-indigo-400">active</span>}
+                </button>
+              ))}
+            </>
+          )}
+
+          {allocateMutation.isPending && (
+            <div className="flex items-center gap-2 px-4 py-2.5 text-xs text-gray-500">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminAgents() {
-  const { data: agents = [], isLoading, error } = useQuery<Agent[]>({
+  const { data: agents = [], isLoading: agentsLoading, error } = useQuery<Agent[]>({
     queryKey: ["admin", "agents"],
     queryFn: async () => {
       const res = await fetch(`${API_URL}/admin/agents`, { credentials: "include" });
@@ -38,6 +149,26 @@ export default function AdminAgents() {
       return data.data.agents;
     },
     refetchInterval: 15_000,
+  });
+
+  const { data: users = [] } = useQuery<AdminUser[]>({
+    queryKey: ["admin", "users-list"],
+    queryFn: async () => {
+      const res = await fetch(`${API_URL}/admin/users`, { credentials: "include" });
+      const data = await res.json();
+      if (!data.success) return [];
+      return data.data.users.map((u: { id: string; email: string }) => ({ id: u.id, email: u.email }));
+    },
+  });
+
+  const { data: groups = [] } = useQuery<Group[]>({
+    queryKey: ["admin", "groups"],
+    queryFn: async () => {
+      const res = await fetch(`${API_URL}/admin/groups`, { credentials: "include" });
+      const data = await res.json();
+      if (!data.success) return [];
+      return data.data.groups;
+    },
   });
 
   if (error) {
@@ -56,7 +187,7 @@ export default function AdminAgents() {
       <div>
         <h2 className="text-xl font-bold text-white mb-1">Storage Node Health</h2>
         <p className="text-sm text-gray-500">
-          Monitor real-time connectivity and status of all registered storage nodes.
+          Monitor and allocate storage nodes to users or groups.
         </p>
       </div>
 
@@ -72,7 +203,7 @@ export default function AdminAgents() {
         </div>
       </div>
 
-      {isLoading ? (
+      {agentsLoading ? (
         <div className="flex items-center gap-2 text-gray-500 py-10">
           <Loader2 className="w-5 h-5 animate-spin" /> Loading agents…
         </div>
@@ -109,7 +240,7 @@ export default function AdminAgents() {
                     <div className="text-sm font-mono text-gray-200">
                       {agent.cloudId.substring(0, 18)}…
                     </div>
-                    <div className="text-xs text-gray-500 mt-0.5">{agent.user.email}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">Owner: {agent.user.email}</div>
                   </div>
                 </div>
                 <span
@@ -149,6 +280,9 @@ export default function AdminAgents() {
                   <div className="text-gray-300 font-medium">{agent.version ?? "—"}</div>
                 </div>
               </div>
+
+              {/* Allocation selector */}
+              <AllocationSelector agent={agent} users={users} groups={groups} />
 
               <div className="mt-3 text-xs text-gray-600">
                 Registered {new Date(agent.createdAt).toLocaleDateString()}

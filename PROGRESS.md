@@ -222,7 +222,17 @@
 | GitHub Actions | ✅ | CI now installs, builds shared packages, typechecks, lints, builds all packages, builds Docker images, and conditionally deploys on pushes to `main` when deploy secrets are configured. |
 | Local startup docs | ✅ | `start.bat`, `README.md`, and `HOW_TO_RUN.md` updated with Gateway metrics and observability commands. |
 
-## Phase 12 — Post-MVP Polish ⏳ NOT STARTED
+## Phase 12 — Post-MVP Polish ✅ COMPLETED
+
+### Implemented
+| Item | Status | Notes |
+|---|---|---|
+| Trash / Restore | ✅ | Soft-deletes `deletedAt` logic, API endpoints `/trash` and `/restore`, Trash UI page. |
+| File Versioning | ✅ | Snapshot previous versions on file replacement, UI to view history. |
+| Previews | ✅ | In-browser preview modal for images, PDF, text, audio, and video. |
+| Multi-Agent | ✅ | Backend agent querying and selector dropdown on the frontend for multi-node setups. |
+| Quotas / Email | ✅ | Nodemailer integrated, 80%/95% warnings, email on agent offline. |
+| TOTP / 2FA | ✅ | Authenticator app setup and verify route, login flow update, Settings page. |
 
 ---
 
@@ -244,3 +254,4 @@
 | 2026-07-07 | 11 | Added Prometheus, Grafana, Loki, Promtail, and Nginx deployment configs. |
 | 2026-07-07 | 11 | Added Ubuntu agent installer script and refreshed systemd environment URLs. |
 | 2026-07-07 | 11 | Expanded GitHub Actions to build, lint, typecheck, Docker-build, and conditionally deploy on `main`. |
+| 2026-07-11 | 12 | Implemented Trash/Restore, TOTP (2FA), File Versioning, Email Alerts, Previews, Multi-Agent UI. |

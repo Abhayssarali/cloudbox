@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FolderOpen, Settings, LogOut, ShieldCheck, Share2 } from "lucide-react";
+import { LayoutDashboard, FolderOpen, Settings, LogOut, ShieldCheck, Share2, Trash2 } from "lucide-react";
 import { useAuthStore } from "@/stores/useAuthStore";
 import type { AuthState } from "@/stores/useAuthStore";
 
@@ -25,6 +25,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
     { name: "My Files", href: "/dashboard/files", icon: FolderOpen },
     { name: "Shared", href: "/dashboard/shared", icon: Share2 },
+    { name: "Trash", href: "/dashboard/trash", icon: Trash2 },
     { name: "Settings", href: "/dashboard/settings", icon: Settings },
     ...(isAdmin ? [{ name: "Admin", href: "/dashboard/admin", icon: ShieldCheck }] : []),
   ];

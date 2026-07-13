@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuthStore } from "@/stores/useAuthStore";
 import type { AuthState } from "@/stores/useAuthStore";
+import { HardDrive, CheckCircle2, AlertTriangle, Server, Plus } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -20,12 +21,86 @@ interface ApiResponse<T> {
   error?: string;
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
+}
+
+interface UserWithUsage {
+  usedBytes: number;
+  quotaBytes: number;
+}
+
+// ---- Storage Usage widget shown to regular users ----
+function StorageUsageWidget() {
+  const [usage, setUsage] = useState<UserWithUsage | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_URL}/me`, { credentials: "include" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success) {
+          setUsage({ usedBytes: Number(d.data.user.usedBytes), quotaBytes: Number(d.data.user.quotaBytes) });
+        }
+      })
+      .catch(() => {/* silent */});
+  }, []);
+
+  const used = usage?.usedBytes ?? 0;
+  const quota = usage?.quotaBytes ?? 0;
+  const pct = quota > 0 ? Math.min(100, (used / quota) * 100) : 0;
+  const isWarning = pct >= 80;
+  const isCritical = pct >= 95;
+
+  return (
+    <div className="usage-card">
+      <div className="usage-card__header">
+        <div className="usage-card__icon">
+          <HardDrive className="w-5 h-5 text-indigo-400" />
+        </div>
+        <div>
+          <h3 className="usage-card__title">Your Storage</h3>
+          <p className="usage-card__sub">Managed by your administrator</p>
+        </div>
+      </div>
+
+      <div className="usage-card__bar-wrap">
+        <div className="usage-card__bar-track">
+          <div
+            className={`usage-card__bar-fill ${isCritical ? "usage-card__bar-fill--crit" : isWarning ? "usage-card__bar-fill--warn" : ""}`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <div className="usage-card__bar-labels">
+          <span className={`usage-card__used ${isCritical ? "usage-card__used--crit" : isWarning ? "usage-card__used--warn" : ""}`}>
+            {isCritical && <AlertTriangle className="w-3.5 h-3.5 inline mr-1" />}
+            {formatBytes(used)} used
+          </span>
+          <span className="usage-card__quota">
+            {quota > 0 ? formatBytes(quota) + " total" : "Unlimited"}
+          </span>
+        </div>
+      </div>
+
+      <div className="usage-card__footer">
+        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+        <span>Storage is automatically managed — just upload your files</span>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardClient() {
   const user = useAuthStore((s: AuthState) => s.user);
   const [agents, setAgents] = useState<AgentRecord[]>([]);
   const [claimCode, setClaimCode] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
 
   const fetchAgents = useCallback(async () => {
     try {
@@ -37,15 +112,16 @@ export default function DashboardClient() {
     }
   }, []);
 
-  // Poll every 10 seconds for live status
+  // Poll every 10 seconds for live status — only for admins who own nodes
   useEffect(() => {
+    if (!isAdmin) return;
     const initialFetch = setTimeout(fetchAgents, 0);
     const interval = setInterval(fetchAgents, 10_000);
     return () => {
       clearTimeout(initialFetch);
       clearInterval(interval);
     };
-  }, [fetchAgents]);
+  }, [fetchAgents, isAdmin]);
 
   async function handleClaimNode() {
     setIsLoading(true);
@@ -70,47 +146,57 @@ export default function DashboardClient() {
         <div className="dash__hero">
           <h2>Welcome back, {user?.email?.split("@")[0]}</h2>
           <p className="dash__hero-sub">
-            {onlineCount > 0
-              ? `${onlineCount} node${onlineCount > 1 ? "s" : ""} online and ready`
-              : "No nodes online. Start your agent to begin."}
+            {isAdmin
+              ? onlineCount > 0
+                ? `${onlineCount} node${onlineCount > 1 ? "s" : ""} online and ready`
+                : "No nodes online. Start your agent to begin."
+              : "Your personal cloud storage — fast, private, and managed for you."}
           </p>
         </div>
 
-        <div className="dash__section">
-          <div className="dash__section-header">
-            <h3>Storage Nodes</h3>
-            <button onClick={handleClaimNode} disabled={isLoading} className="dash__btn dash__btn--primary">
-              {isLoading ? "Generating..." : "+ Add Node"}
-            </button>
-          </div>
+        {/* Regular user: show storage usage widget, no node details */}
+        {!isAdmin && <StorageUsageWidget />}
 
-          {error && <p className="dash__error">{error}</p>}
-
-          {agents.length === 0 ? (
-            <div className="dash__empty">
-              <p>No nodes registered yet.</p>
-              <p className="dash__empty-sub">Click <strong>+ Add Node</strong> to link your first device.</p>
+        {/* Admin: show storage nodes management panel */}
+        {isAdmin && (
+          <div className="dash__section">
+            <div className="dash__section-header">
+              <h3>Storage Nodes</h3>
+              <button onClick={handleClaimNode} disabled={isLoading} className="dash__btn dash__btn--primary">
+                <Plus className="w-3.5 h-3.5 inline mr-1.5" />
+                {isLoading ? "Generating..." : "Add Node"}
+              </button>
             </div>
-          ) : (
-            <div className="dash__agent-list">
-              {agents.map((agent) => (
-                <div key={agent.id} className="dash__agent-card">
-                  <div className="dash__agent-info">
-                    <span className={`dash__status-dot ${agent.status === "ONLINE" ? "dash__status-dot--online" : ""}`} />
-                    <div>
-                      <div className="dash__agent-id">{agent.cloudId}</div>
-                      <div className="dash__agent-meta">
-                        {agent.status === "ONLINE"
-                          ? "🟢 Online"
-                          : `🔴 Offline${agent.lastHeartbeat ? ` · Last seen ${new Date(agent.lastHeartbeat).toLocaleString()}` : ""}`}
+
+            {error && <p className="dash__error">{error}</p>}
+
+            {agents.length === 0 ? (
+              <div className="dash__empty">
+                <Server className="w-12 h-12 mx-auto mb-3 text-gray-700" />
+                <p>No nodes registered yet.</p>
+                <p className="dash__empty-sub">Click <strong>Add Node</strong> to link your first device.</p>
+              </div>
+            ) : (
+              <div className="dash__agent-list">
+                {agents.map((agent) => (
+                  <div key={agent.id} className="dash__agent-card">
+                    <div className="dash__agent-info">
+                      <span className={`dash__status-dot ${agent.status === "ONLINE" ? "dash__status-dot--online" : ""}`} />
+                      <div>
+                        <div className="dash__agent-id">{agent.cloudId}</div>
+                        <div className="dash__agent-meta">
+                          {agent.status === "ONLINE"
+                            ? "🟢 Online"
+                            : `🔴 Offline${agent.lastHeartbeat ? ` · Last seen ${new Date(agent.lastHeartbeat).toLocaleString()}` : ""}`}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {claimCode && (
@@ -140,7 +226,7 @@ export default function DashboardClient() {
         .dash__section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
         .dash__section-header h3 { margin: 0; font-size: 1rem; font-weight: 600; }
 
-        .dash__btn { background: var(--cb-surface-2, rgba(255,255,255,.06)); border: 1px solid var(--cb-border); color: var(--cb-text); padding: .5rem 1rem; border-radius: 8px; cursor: pointer; font-size: .875rem; font-weight: 500; transition: all .15s; }
+        .dash__btn { background: var(--cb-surface-2, rgba(255,255,255,.06)); border: 1px solid var(--cb-border); color: var(--cb-text); padding: .5rem 1rem; border-radius: 8px; cursor: pointer; font-size: .875rem; font-weight: 500; transition: all .15s; display:inline-flex; align-items:center; }
         .dash__btn:hover { background: rgba(255,255,255,.1); }
         .dash__btn--primary { background: var(--cb-primary, #6366f1); color: white; border: none; }
         .dash__btn--primary:hover { opacity: .88; }
@@ -171,6 +257,24 @@ export default function DashboardClient() {
         .modal p { color: var(--cb-text-muted); font-size: .9375rem; margin: 0 0 1rem; line-height: 1.6; }
         .modal__code-block { background: #000; border: 1px solid rgba(255,255,255,.08); padding: .875rem 1rem; border-radius: 8px; font-family: monospace; font-size: .9375rem; color: #a5b4fc; word-break: break-all; }
         .modal__note { font-size: .8125rem !important; color: #fb7185 !important; margin-top: 1rem !important; }
+
+        /* Storage Usage Widget */
+        .usage-card { background: var(--cb-surface); border: 1px solid var(--cb-border); border-radius: 14px; padding: 1.5rem; }
+        .usage-card__header { display: flex; align-items: center; gap: .875rem; margin-bottom: 1.25rem; }
+        .usage-card__icon { width: 42px; height: 42px; border-radius: 10px; background: rgba(99,102,241,.12); border: 1px solid rgba(99,102,241,.2); display: flex; align-items: center; justify-content: center; }
+        .usage-card__title { font-size: 1rem; font-weight: 600; margin: 0; color: white; }
+        .usage-card__sub { font-size: .8125rem; color: var(--cb-text-muted); margin: .125rem 0 0; }
+        .usage-card__bar-wrap { margin-bottom: 1rem; }
+        .usage-card__bar-track { height: 8px; background: rgba(255,255,255,.06); border-radius: 99px; overflow: hidden; margin-bottom: .5rem; }
+        .usage-card__bar-fill { height: 100%; background: linear-gradient(90deg, #6366f1, #8b5cf6); border-radius: 99px; transition: width .6s ease; }
+        .usage-card__bar-fill--warn { background: linear-gradient(90deg, #f59e0b, #f97316); }
+        .usage-card__bar-fill--crit { background: linear-gradient(90deg, #ef4444, #fb7185); }
+        .usage-card__bar-labels { display: flex; justify-content: space-between; font-size: .8125rem; }
+        .usage-card__used { color: var(--cb-text); font-weight: 500; display: flex; align-items: center; gap: .25rem; }
+        .usage-card__used--warn { color: #f59e0b; }
+        .usage-card__used--crit { color: #fb7185; }
+        .usage-card__quota { color: var(--cb-text-muted); }
+        .usage-card__footer { display: flex; align-items: center; gap: .5rem; font-size: .8125rem; color: var(--cb-text-muted); padding-top: 1rem; border-top: 1px solid var(--cb-border); }
       `}</style>
     </div>
   );

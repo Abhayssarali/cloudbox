@@ -17,6 +17,52 @@ agentsRouter.get("/", requireAuth, async (req, res) => {
   res.json({ success: true, data: { agents } });
 });
 
+// ---- GET /agents/mine ----
+// Returns all agents accessible by the current user:
+//  - owned agents, OR
+//  - agents allocated to this user, OR
+//  - agents allocated to the user's group
+agentsRouter.get("/mine", requireAuth, async (req, res) => {
+  const userId = req.authPayload!.userId;
+
+  // Get user with their groupId
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true, groupId: true },
+  });
+
+  if (!user) {
+    res.status(404).json({ success: false, error: "User not found" });
+    return;
+  }
+
+  const agents = await prisma.agent.findMany({
+    where: {
+      OR: [
+        { userId },
+        { allocatedUserId: userId },
+        ...(user.groupId ? [{ allocatedGroupId: user.groupId }] : []),
+      ],
+    },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      cloudId: true,
+      status: true,
+      version: true,
+      lastHeartbeat: true,
+      createdAt: true,
+    },
+  });
+  const formatted = agents.map((a) => ({
+    ...a,
+    lastHeartbeat: a.lastHeartbeat?.toISOString() ?? null,
+    createdAt: a.createdAt.toISOString(),
+  }));
+  res.json({ success: true, data: { agents: formatted } });
+});
+
+
 // ---- POST /agents/claim ----
 agentsRouter.post("/claim", requireAuth, async (req, res) => {
   // Generate a random 6-character hex code

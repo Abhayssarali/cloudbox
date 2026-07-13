@@ -19,10 +19,13 @@ model User {
   quotaBytes   BigInt   @default(0)
   usedBytes    BigInt   @default(0)
   groupId      String?
+  totpSecret   String?
+  totpEnabled  Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   group        Group?   @relation(fields: [groupId], references: [id])
-  agents       Agent[]
+  agents           Agent[]   @relation("OwnedAgents")
+  allocatedAgents  Agent[]   @relation("AllocatedUserAgents")
   activityLogs ActivityLog[]
 
   @@map("users")
@@ -35,28 +38,35 @@ model Agent {
   publicKey     String
   status        AgentStatus @default(OFFLINE)
   version       String?
-  lastHeartbeat DateTime?
-  createdAt     DateTime    @default(now())
-  user          User        @relation(fields: [userId], references: [id])
-  files         File[]
+  lastHeartbeat    DateTime?
+  createdAt        DateTime    @default(now())
+  allocatedUserId  String?
+  allocatedGroupId String?
+  user             User        @relation("OwnedAgents", fields: [userId], references: [id])
+  allocatedUser    User?       @relation("AllocatedUserAgents", fields: [allocatedUserId], references: [id])
+  allocatedGroup   Group?      @relation("AllocatedGroupAgents", fields: [allocatedGroupId], references: [id])
+  files            File[]
 
   @@map("agents")
 }
 
 model File {
-  id         String      @id @default(uuid())
+  id         String        @id @default(uuid())
   agentId    String
   path       String
   name       String
   size       BigInt
   mimeType   String?
-  isFolder   Boolean     @default(false)
+  isFolder   Boolean       @default(false)
   parentId   String?
-  updatedAt  DateTime    @updatedAt
-  agent      Agent       @relation(fields: [agentId], references: [id])
+  updatedAt  DateTime      @updatedAt
+  deletedAt  DateTime?
+  agent      Agent         @relation(fields: [agentId], references: [id])
   shareLinks ShareLink[]
+  versions   FileVersion[]
 
   @@unique([agentId, path])
+  @@index([deletedAt])
   @@map("files")
 }
 
@@ -71,6 +81,18 @@ model ShareLink {
   @@map("share_links")
 }
 
+model FileVersion {
+  id            String   @id @default(uuid())
+  fileId        String
+  versionNumber Int
+  size          BigInt
+  storagePath   String
+  createdAt     DateTime @default(now())
+  file          File     @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@map("file_versions")
+}
+
 enum Role {
   SUPER_ADMIN
   ADMIN
@@ -83,11 +105,12 @@ enum AgentStatus {
 }
 
 model Group {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  description String?
-  createdAt   DateTime @default(now())
-  users       User[]
+  id              String   @id @default(uuid())
+  name            String   @unique
+  description     String?
+  createdAt       DateTime @default(now())
+  users           User[]
+  allocatedAgents Agent[]  @relation("AllocatedGroupAgents")
 
   @@map("groups")
 }
@@ -101,4 +124,13 @@ model ActivityLog {
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@map("activity_logs")
+}
+
+model TotpSetup {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  secret    String
+  createdAt DateTime @default(now())
+
+  @@map("totp_setups")
 }

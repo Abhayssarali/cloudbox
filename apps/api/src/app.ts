@@ -14,6 +14,7 @@ import { agentsRouter } from "./routes/agents.js";
 import { filesRouter } from "./routes/files.js";
 import { adminRouter } from "./routes/admin.js";
 import { sharingRouter } from "./routes/sharing.js";
+import { totpRouter } from "./routes/totp.js";
 
 const app: Express = express();
 
@@ -60,6 +61,7 @@ app.use(metricsMiddleware);
 app.use("/health", healthRouter);
 app.use("/metrics", metricsRouter);
 app.use("/auth", authRouter);
+app.use("/auth/totp", totpRouter);
 app.use("/agents", agentsRouter);
 app.use("/files", filesRouter);
 app.use("/admin", adminRouter);

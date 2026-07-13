@@ -1,6 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
 import argon2 from "argon2";
+// @ts-expect-error - otplib typings don't play well with NodeNext
+import { authenticator } from "otplib";
+import jwt from "jsonwebtoken";
 import { prisma } from "../lib/prisma.js";
 import { passport } from "../lib/passport.js";
 import { setAuthCookies, clearAuthCookies, verifyRefreshToken, signAccessToken } from "../lib/jwt.js";
@@ -91,6 +94,18 @@ authRouter.post("/login", async (req, res) => {
     return;
   }
 
+  // If TOTP is enabled, issue a short-lived temp token and require second factor
+  if (user.totpEnabled) {
+    const jwtSecret = process.env["JWT_ACCESS_SECRET"] ?? "change-me";
+    const tempToken = jwt.sign(
+      { userId: user.id, role: user.role, purpose: "totp" },
+      jwtSecret,
+      { expiresIn: "5m" }
+    );
+    res.json({ success: true, data: { requiresTotp: true, tempToken } });
+    return;
+  }
+
   setAuthCookies(res, user.id, user.role);
   await logActivity("LOGIN", { userId: user.id, meta: { email: user.email } });
 
@@ -101,6 +116,54 @@ authRouter.post("/login", async (req, res) => {
     },
   });
 });
+
+// ---- POST /auth/login/totp ----
+// Complete login when TOTP is enabled
+authRouter.post("/login/totp", async (req, res) => {
+  const { tempToken, code } = req.body as { tempToken?: string; code?: string };
+
+  if (!tempToken || !code) {
+    res.status(400).json({ success: false, error: "tempToken and code are required" });
+    return;
+  }
+
+  try {
+    const jwtSecret = process.env["JWT_ACCESS_SECRET"] ?? "change-me";
+    const payload = jwt.verify(tempToken, jwtSecret) as { userId: string; role: string; purpose: string };
+
+    if (payload.purpose !== "totp") {
+      res.status(401).json({ success: false, error: "Invalid token" });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { id: true, email: true, role: true, totpSecret: true, totpEnabled: true },
+    });
+
+    if (!user || !user.totpEnabled || !user.totpSecret) {
+      res.status(401).json({ success: false, error: "Invalid session" });
+      return;
+    }
+
+    const valid = authenticator.verify({ token: code, secret: user.totpSecret });
+    if (!valid) {
+      res.status(401).json({ success: false, error: "Invalid or expired 2FA code" });
+      return;
+    }
+
+    setAuthCookies(res, user.id, user.role as "SUPER_ADMIN" | "ADMIN" | "USER");
+    await logActivity("LOGIN", { userId: user.id, meta: { email: user.email, method: "totp" } });
+
+    res.json({
+      success: true,
+      data: { user: { id: user.id, email: user.email, role: user.role } },
+    });
+  } catch {
+    res.status(401).json({ success: false, error: "Invalid or expired token" });
+  }
+});
+
 
 // ---- POST /auth/logout ----
 

@@ -199,6 +199,23 @@ program
               break;
             }
 
+            case "DELETE_FILE": {
+              const delPath = path.join(CONFIG_DIR, "storage", msg.path);
+              console.log(`[Agent] DELETE_FILE: ${delPath}`);
+              try {
+                if (fs.existsSync(delPath)) {
+                  fs.unlinkSync(delPath);
+                  console.log(`[Agent] Deleted: ${delPath}`);
+                }
+                send(ws, { type: "DELETE_ACK", requestId: msg.requestId, success: true });
+              } catch (err) {
+                console.error(`[Agent] DELETE_FILE error:`, err);
+                send(ws, { type: "DELETE_ACK", requestId: msg.requestId, success: false });
+              }
+              break;
+            }
+
+
             case "FILE_CHUNK": {
               const stream = activeUploads.get(msg.requestId);
               if (!stream) {

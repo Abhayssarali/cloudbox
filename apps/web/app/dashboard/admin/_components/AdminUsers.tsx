@@ -12,9 +12,12 @@ type AdminUser = {
   role: "USER" | "ADMIN" | "SUPER_ADMIN";
   quotaBytes: string;
   usedBytes: string;
+  groupId: string | null;
   group: { name: string } | null;
   createdAt: string;
 };
+
+type Group = { id: string; name: string };
 
 function formatBytes(bytesStr: string) {
   const bytes = parseInt(bytesStr, 10);
@@ -29,6 +32,7 @@ export default function AdminUsers() {
   const qc = useQueryClient();
   const [editingQuota, setEditingQuota] = useState<{ userId: string; value: string } | null>(null);
   const [editingRole, setEditingRole] = useState<{ userId: string } | null>(null);
+  const [editingGroup, setEditingGroup] = useState<{ userId: string } | null>(null);
 
   const { data: users = [], isLoading, error } = useQuery<AdminUser[]>({
     queryKey: ["admin", "users"],
@@ -75,6 +79,34 @@ export default function AdminUsers() {
       setEditingRole(null);
     },
     onError: (e: Error) => alert(`Failed: ${e.message}`),
+  });
+
+  const groupMutation = useMutation({
+    mutationFn: async ({ userId, groupId }: { userId: string; groupId: string | null }) => {
+      const res = await fetch(`${API_URL}/admin/users/${userId}/group`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ groupId }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "users"] });
+      setEditingGroup(null);
+    },
+    onError: (e: Error) => alert(`Failed: ${e.message}`),
+  });
+
+  const { data: groups = [] } = useQuery<Group[]>({
+    queryKey: ["admin", "groups"],
+    queryFn: async () => {
+      const res = await fetch(`${API_URL}/admin/groups`, { credentials: "include" });
+      const data = await res.json();
+      if (!data.success) return [];
+      return data.data.groups;
+    },
   });
 
   if (error) {
@@ -149,7 +181,32 @@ export default function AdminUsers() {
                       </div>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-gray-400 text-xs">{u.group?.name ?? "—"}</td>
+                  <td className="px-4 py-3 text-gray-400 text-xs">
+                    {editingGroup?.userId === u.id ? (
+                      <div className="flex items-center gap-1">
+                        <select
+                          className="bg-[#1f2229] border border-[#2d3139] text-gray-200 text-xs rounded px-2 py-1"
+                          defaultValue={u.groupId ?? ""}
+                          onChange={(e) => groupMutation.mutate({ userId: u.id, groupId: e.target.value || null })}
+                        >
+                          <option value="">— No group</option>
+                          {groups.map((g) => (
+                            <option key={g.id} value={g.id}>{g.name}</option>
+                          ))}
+                        </select>
+                        <button onClick={() => setEditingGroup(null)}>
+                          <X className="w-4 h-4 text-gray-500 hover:text-rose-400" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <span>{u.group?.name ?? "—"}</span>
+                        <button onClick={() => setEditingGroup({ userId: u.id })}>
+                          <Edit2 className="w-3 h-3 text-gray-600 hover:text-gray-300" />
+                        </button>
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <div className="text-gray-300 text-xs">{formatBytes(u.usedBytes)}</div>
                     {parseInt(u.quotaBytes, 10) > 0 && (

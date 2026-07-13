@@ -242,6 +242,8 @@ adminRouter.get("/agents", async (_req: Request, res: Response) => {
     const agents = await prisma.agent.findMany({
       include: {
         user: { select: { id: true, email: true } },
+        allocatedUser: { select: { id: true, email: true } },
+        allocatedGroup: { select: { id: true, name: true } },
         _count: { select: { files: true } },
       },
       orderBy: { lastHeartbeat: "desc" },
@@ -256,6 +258,8 @@ adminRouter.get("/agents", async (_req: Request, res: Response) => {
       createdAt: a.createdAt.toISOString(),
       user: a.user,
       fileCount: a._count.files,
+      allocatedUser: a.allocatedUser,
+      allocatedGroup: a.allocatedGroup,
     }));
 
     res.json({ success: true, data: { agents: formatted } });
@@ -323,3 +327,49 @@ adminRouter.get("/activity", async (req: Request, res: Response) => {
   }
 });
 
+// ---- POST /admin/agents/:id/allocate ----
+// Allocate an agent to a user, a group, or clear allocation
+adminRouter.post("/agents/:id/allocate", async (req: Request, res: Response) => {
+  try {
+    const agentId = req.params["id"];
+    if (!agentId) {
+      res.status(400).json({ success: false, error: "Agent ID is required" });
+      return;
+    }
+
+    const { userId, groupId } = req.body as {
+      userId?: string | null;
+      groupId?: string | null;
+    };
+
+    const agent = await prisma.agent.update({
+      where: { id: agentId },
+      data: {
+        allocatedUserId: userId ?? null,
+        allocatedGroupId: groupId ?? null,
+      },
+      include: {
+        allocatedUser: { select: { id: true, email: true } },
+        allocatedGroup: { select: { id: true, name: true } },
+      },
+    });
+
+    res.json({
+      success: true,
+      data: {
+        agent: {
+          id: agent.id,
+          allocatedUser: agent.allocatedUser,
+          allocatedGroup: agent.allocatedGroup,
+        },
+      },
+    });
+  } catch (err: unknown) {
+    console.error("[AdminRoute] Error allocating agent:", err);
+    if (isKnownPrismaError(err) && err.code === "P2025") {
+      res.status(404).json({ success: false, error: "Agent not found" });
+    } else {
+      res.status(500).json({ success: false, error: "Failed to allocate agent" });
+    }
+  }
+});
