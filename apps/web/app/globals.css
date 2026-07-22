@@ -1,69 +1,129 @@
 @import "tailwindcss";
 
-:root {
-  --font-inter: "Inter", sans-serif;
+@layer base {
+  :root {
+    --font-inter: 'Inter', system-ui, -apple-system, sans-serif;
 
-  /* CloudBox color palette */
-  --cb-bg: #0a0a0f;
-  --cb-surface: #111118;
-  --cb-surface-2: #18181f;
-  --cb-border: rgba(255, 255, 255, 0.08);
-  --cb-border-hover: rgba(255, 255, 255, 0.16);
+    /* Modern Dark Palette - Deep Slate / Zinc */
+    --cb-bg: #0b0e14;
+    --cb-bg-elevated: #0f141f;
+    --cb-surface: #141b27;
+    --cb-surface-hover: #1c2638;
+    --cb-surface-active: #222e43;
+    
+    --cb-border: rgba(255, 255, 255, 0.07);
+    --cb-border-subtle: rgba(255, 255, 255, 0.04);
+    --cb-border-hover: rgba(99, 102, 241, 0.3);
+    
+    /* Vibrant Gradients & Accents */
+    --cb-primary: #6366f1;
+    --cb-primary-hover: #4f46e5;
+    --cb-primary-light: #818cf8;
+    --cb-primary-glow: rgba(99, 102, 241, 0.25);
+    
+    --cb-violet: #8b5cf6;
+    --cb-cyan: #06b6d4;
+    --cb-emerald: #10b981;
+    --cb-amber: #f59e0b;
+    --cb-rose: #f43f5e;
 
-  --cb-primary: #6366f1;
-  --cb-primary-light: #818cf8;
-  --cb-primary-glow: rgba(99, 102, 241, 0.35);
+    --cb-text: #f8fafc;
+    --cb-text-muted: #94a3b8;
+    --cb-text-subtle: #64748b;
+  }
 
-  --cb-accent: #06b6d4;
-  --cb-accent-glow: rgba(6, 182, 212, 0.2);
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 
-  --cb-text: #f8fafc;
-  --cb-text-muted: #94a3b8;
-  --cb-text-subtle: #64748b;
-
-  --cb-success: #10b981;
-  --cb-error: #f43f5e;
-  --cb-warning: #f59e0b;
+  html,
+  body {
+    background-color: var(--cb-bg);
+    color: var(--cb-text);
+    font-family: var(--font-inter), sans-serif;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-html,
-body {
-  background-color: var(--cb-bg);
-  color: var(--cb-text);
-  font-family: var(--font-inter), sans-serif;
-  min-height: 100vh;
-}
-
-/* Smooth scrolling */
-html {
-  scroll-behavior: smooth;
-}
-
-/* Custom scrollbar */
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--cb-surface);
+  background: var(--cb-bg);
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--cb-border-hover);
-  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 99px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--cb-text-subtle);
+  background: rgba(255, 255, 255, 0.2);
 }
 
-/* Focus ring */
-*:focus-visible {
-  outline: 2px solid var(--cb-primary);
-  outline-offset: 2px;
-  border-radius: 4px;
+/* Custom Utilities & Components */
+.glass-panel {
+  background: rgba(20, 27, 39, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--cb-border);
 }
+
+.glass-card {
+  background: linear-gradient(180deg, rgba(22, 30, 44, 0.6) 0%, rgba(15, 20, 31, 0.8) 100%);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--cb-border);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card:hover {
+  border-color: var(--cb-border-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.5), 0 0 20px 0 var(--cb-primary-glow);
+}
+
+.ambient-glow {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(80px);
+  pointer-events: none;
+  opacity: 0.15;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 4px 14px 0 rgba(99, 102, 241, 0.35);
+  transition: all 0.2s ease;
+}
+.btn-primary:hover {
+  box-shadow: 0 6px 20px 0 rgba(99, 102, 241, 0.5);
+  transform: translateY(-1px);
+}
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.status-pulse-green {
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  animation: pulse-green 2s infinite;
+}
+
+@keyframes pulse-green {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+

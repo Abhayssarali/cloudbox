@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Users, Server, HardDrive, FileText, Loader2, Wifi, WifiOff } from "lucide-react";
+import { Users, Server, HardDrive, FileText, Loader2, Wifi, WifiOff, ShieldCheck } from "lucide-react";
 import WorkspacePanel from "./WorkspacePanel";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -56,73 +56,65 @@ export default function AdminOverview() {
       label: "Total Users",
       value: stats?.userCount ?? 0,
       icon: Users,
-      color: "from-indigo-500 to-blue-500",
-      bg: "bg-indigo-500/10",
+      color: "text-indigo-400 bg-indigo-500/10",
     },
     {
       label: "Storage Nodes",
       value: stats?.agentCount ?? 0,
       sub: `${stats?.onlineAgentCount ?? 0} online`,
       icon: Server,
-      color: "from-cyan-500 to-teal-500",
-      bg: "bg-cyan-500/10",
+      color: "text-emerald-400 bg-emerald-500/10",
     },
     {
       label: "Total Files",
       value: stats?.fileCount ?? 0,
       icon: FileText,
-      color: "from-violet-500 to-purple-500",
-      bg: "bg-violet-500/10",
+      color: "text-cyan-400 bg-cyan-500/10",
     },
     {
-      label: "Storage Used",
+      label: "Storage Capacity Used",
       value: formatBytes(stats?.totalUsedBytes ?? "0"),
       icon: HardDrive,
-      color: "from-fuchsia-500 to-pink-500",
-      bg: "bg-fuchsia-500/10",
+      color: "text-violet-400 bg-violet-500/10",
     },
   ];
 
   if (error) {
     return (
-      <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg">
+      <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs rounded-xl">
         Failed to load stats: {(error as Error).message}
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-xl font-bold text-white mb-1">Platform Overview</h2>
-        <p className="text-sm text-gray-500">Real-time snapshot of your CloudBox platform.</p>
-      </div>
+    <div className="space-y-6">
 
-      {/* Workspace Invite Code — visible to all admins */}
+      {/* Workspace Panel */}
       <WorkspacePanel />
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+      {/* Stats Cards Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {statCards.map((card) => {
           const Icon = card.icon;
           return (
-            <div
-              key={card.label}
-              className="bg-[#12141a] border border-[#1f2229] rounded-xl p-5 flex flex-col gap-4"
-            >
-              <div className={`w-10 h-10 rounded-lg ${card.bg} flex items-center justify-center`}>
-                <Icon className="w-5 h-5 text-white" />
+            <div key={card.label} className="glass-card rounded-3xl p-5 flex flex-col justify-between space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{card.label}</span>
+                <div className={`p-2.5 rounded-2xl ${card.color}`}>
+                  <Icon className="w-5 h-5" />
+                </div>
               </div>
+
               <div>
                 {isLoading ? (
-                  <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
+                  <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
                 ) : (
                   <>
-                    <div className="text-2xl font-bold text-white">{card.value}</div>
-                    {card.sub && <div className="text-xs text-gray-500 mt-0.5">{card.sub}</div>}
+                    <div className="text-2xl font-extrabold text-white tracking-tight">{card.value}</div>
+                    {card.sub && <div className="text-xs text-slate-400 mt-0.5">{card.sub}</div>}
                   </>
                 )}
-                <div className="text-sm text-gray-400 mt-1">{card.label}</div>
               </div>
             </div>
           );
@@ -148,50 +140,59 @@ function AgentQuickStatus() {
   });
 
   return (
-    <div>
-      <h3 className="text-base font-semibold text-white mb-3">Storage Nodes</h3>
+    <div className="glass-card rounded-3xl p-6 space-y-5 border border-white/[0.08]">
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+          <Server className="w-5 h-5 text-emerald-400" />
+          Node Health Snapshot
+        </h3>
+        <span className="text-xs text-slate-400">{agents.length} Total Registered Node(s)</span>
+      </div>
+
       {isLoading ? (
-        <div className="flex items-center gap-2 text-gray-500">
-          <Loader2 className="w-4 h-4 animate-spin" /> Loading agents...
+        <div className="flex items-center gap-2 text-slate-500 text-xs py-4">
+          <Loader2 className="w-4 h-4 animate-spin text-indigo-400" /> Loading storage agents...
         </div>
       ) : agents.length === 0 ? (
-        <p className="text-gray-500 text-sm">No storage nodes registered.</p>
+        <p className="text-slate-500 text-xs py-4 text-center">No storage nodes registered on the system.</p>
       ) : (
-        <div className="space-y-2">
-          {agents.map((agent) => (
-            <div
-              key={agent.id}
-              className="bg-[#12141a] border border-[#1f2229] rounded-lg px-4 py-3 flex items-center justify-between"
-            >
-              <div className="flex items-center gap-3">
-                {agent.status === "ONLINE" ? (
-                  <Wifi className="w-4 h-4 text-emerald-400" />
-                ) : (
-                  <WifiOff className="w-4 h-4 text-gray-600" />
-                )}
-                <div>
-                  <div className="text-sm font-medium text-gray-200 font-mono">
-                    {agent.cloudId.substring(0, 16)}…
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {agents.map((agent) => {
+            const isOnline = agent.status === "ONLINE";
+            return (
+              <div
+                key={agent.id}
+                className={`p-4 rounded-2xl border transition-all flex items-center justify-between ${
+                  isOnline
+                    ? "bg-emerald-500/[0.03] border-emerald-500/20"
+                    : "bg-white/[0.02] border-white/[0.05]"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-xl ${isOnline ? "bg-emerald-500/10 text-emerald-400" : "bg-slate-800 text-slate-500"}`}>
+                    {isOnline ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
                   </div>
-                  <div className="text-xs text-gray-500">Owner: {agent.user.email}</div>
+                  <div>
+                    <div className="text-xs font-mono font-bold text-white truncate max-w-[160px]">
+                      {agent.cloudId}
+                    </div>
+                    <div className="text-[11px] text-slate-500">Owner: {agent.user.email}</div>
+                  </div>
+                </div>
+
+                <div className="text-right space-y-0.5">
+                  <span className={`px-2 py-0.5 text-[9px] font-bold uppercase rounded-full ${
+                    isOnline ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-700/50 text-slate-400"
+                  }`}>
+                    {agent.status}
+                  </span>
+                  <div className="text-[11px] text-slate-500 font-mono">
+                    {agent.fileCount} File{agent.fileCount !== 1 ? "s" : ""}
+                  </div>
                 </div>
               </div>
-              <div className="text-right">
-                <div
-                  className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                    agent.status === "ONLINE"
-                      ? "bg-emerald-500/10 text-emerald-400"
-                      : "bg-gray-500/10 text-gray-500"
-                  }`}
-                >
-                  {agent.status}
-                </div>
-                <div className="text-xs text-gray-600 mt-1">
-                  {agent.fileCount} file{agent.fileCount !== 1 ? "s" : ""}
-                </div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

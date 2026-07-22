@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/useAuthStore";
 import type { AuthState } from "@/stores/useAuthStore";
 import { useEffect } from "react";
-import { Users, Server, Activity, BarChart3 } from "lucide-react";
+import { Users, Server, Activity, BarChart3, ShieldCheck } from "lucide-react";
 
 const adminTabs = [
   { name: "Overview", href: "/dashboard/admin", icon: BarChart3 },
@@ -30,23 +30,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Admin Header */}
-      <div className="bg-[#12141a] border-b border-[#1f2229] px-6 pt-6 pb-0">
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
-            <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.25C17.25 22.15 21 17.25 21 12V7l-9-5z" fill="currentColor" />
-            </svg>
+    <div className="flex flex-col h-full bg-[#0b0e14]">
+
+      {/* Admin Header Sub-nav */}
+      <div className="bg-[#0f141f]/80 backdrop-blur-md border-b border-white/[0.07] px-8 pt-6 pb-0">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
+            <ShieldCheck className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-white font-bold text-lg leading-tight">Admin Dashboard</h1>
-            <p className="text-gray-500 text-xs">Platform management &amp; monitoring</p>
+            <h2 className="text-xl font-bold text-white tracking-tight">Admin Management Portal</h2>
+            <p className="text-xs text-slate-400">System oversight, user quota allocation &amp; agent telemetry</p>
           </div>
         </div>
 
         {/* Sub-nav tabs */}
-        <nav className="flex gap-1">
+        <nav className="flex gap-2">
           {adminTabs.map((tab) => {
             const isActive =
               tab.href === "/dashboard/admin"
@@ -57,10 +56,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <Link
                 key={tab.name}
                 href={tab.href}
-                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${
+                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl border-b-2 transition-all ${
                   isActive
-                    ? "border-violet-500 text-violet-400 bg-violet-500/5"
-                    : "border-transparent text-gray-500 hover:text-gray-300 hover:bg-white/5"
+                    ? "border-violet-400 text-violet-300 bg-white/[0.05]"
+                    : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/[0.02]"
                 }`}
               >
                 <Icon className="w-4 h-4" />
@@ -71,7 +70,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </nav>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 bg-[#0b0c10]">{children}</div>
+      <div className="flex-1 overflow-y-auto p-8">{children}</div>
     </div>
   );
 }

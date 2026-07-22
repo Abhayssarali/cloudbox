@@ -5,552 +5,646 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/useAuthStore";
 import type { AuthState } from "@/stores/useAuthStore";
 import {
-  Folder, File as FileIcon, Upload, Download,
-  ChevronRight, HardDrive, FileImage, FileText,
-  FileArchive, Loader2, Home, Share2, Trash2,
-  Eye, RotateCcw, History, X, Server, ChevronDown
+  FileIcon, Folder, FileImage, FileText, FileArchive, FileAudio, FileVideo,
+  Upload, FolderPlus, Download, Trash2, Search, Link2, Share2, Info,
+  MoreVertical, Grid, List, CheckCircle2, AlertCircle, X, Check, Copy, FolderOpen,
+  Loader2, RefreshCw, FileCode2, Image as ImageIcon, ChevronRight, CornerDownRight
 } from "lucide-react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+// API Helpers
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
-type FileNode = {
+interface FileItem {
   id: string;
-  agentId: string;
-  path: string;
   name: string;
-  size: string;
-  isFolder: boolean;
-  mimeType: string | null;
+  type: "file" | "folder";
+  size?: number;
+  mimeType?: string;
   parentId: string | null;
+  nodeId?: string;
+  createdAt: string;
   updatedAt: string;
-};
+  cid?: string;
+}
 
-type AgentNode = {
-  id: string;
-  cloudId: string;
-  status: "ONLINE" | "OFFLINE";
-  version: string | null;
-  lastHeartbeat: string | null;
-  createdAt: string;
-};
-
-type FileVersion = {
-  id: string;
-  versionNumber: number;
-  size: string;
-  storagePath: string;
-  createdAt: string;
-};
-
-// ---- Helpers ----
-function formatBytes(bytesStr: string) {
-  const bytes = parseInt(bytesStr, 10);
-  if (isNaN(bytes) || bytes === 0) return "0 Bytes";
+// ----------------------------------------------------------------------
+// FORMATTING & ICONS
+// ----------------------------------------------------------------------
+function formatBytes(bytes?: number) {
+  if (bytes === undefined || bytes === null) return "--";
+  if (bytes === 0) return "0 B";
   const k = 1024;
-  const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 }
 
-function isPreviewable(file: FileNode): boolean {
-  const mime = file.mimeType ?? "";
-  return (
-    mime.startsWith("image/") ||
-    mime.startsWith("video/") ||
-    mime.startsWith("audio/") ||
-    mime === "application/pdf" ||
-    mime.startsWith("text/")
-  );
+function formatDate(dateStr: string) {
+  const d = new Date(dateStr);
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  }).format(d);
 }
 
-// ---- File Icon ----
-function FileNodeIcon({ file, size = "w-10 h-10" }: { file: FileNode; size?: string }) {
-  if (file.isFolder) return <Folder className={`${size} text-indigo-400 fill-indigo-400/20`} />;
-  if (file.mimeType?.includes("image")) return <FileImage className={`${size} text-cyan-400`} />;
-  if (file.mimeType?.includes("text") || file.mimeType?.includes("pdf")) return <FileText className={`${size} text-gray-400`} />;
-  if (file.mimeType?.includes("zip") || file.mimeType?.includes("tar")) return <FileArchive className={`${size} text-orange-400`} />;
-  if (file.mimeType?.includes("video") || file.mimeType?.includes("audio")) return <FileImage className={`${size} text-purple-400`} />;
-  return <FileIcon className={`${size} text-gray-400`} />;
+function getFileIcon(type: string, mimeType?: string, className: string = "w-5 h-5") {
+  if (type === "folder") return <Folder className={`${className} text-indigo-400`} />;
+  if (!mimeType) return <FileIcon className={`${className} text-slate-400`} />;
+  if (mimeType.startsWith("image/")) return <ImageIcon className={`${className} text-blue-400`} />;
+  if (mimeType.startsWith("video/")) return <FileVideo className={`${className} text-fuchsia-400`} />;
+  if (mimeType.startsWith("audio/")) return <FileAudio className={`${className} text-orange-400`} />;
+  if (mimeType.includes("pdf")) return <FileText className={`${className} text-rose-400`} />;
+  if (mimeType.includes("zip") || mimeType.includes("tar") || mimeType.includes("rar") || mimeType.includes("gzip")) return <FileArchive className={`${className} text-amber-400`} />;
+  if (mimeType.includes("json") || mimeType.includes("javascript") || mimeType.includes("html") || mimeType.includes("css")) return <FileCode2 className={`${className} text-emerald-400`} />;
+  if (mimeType.includes("text/")) return <FileText className={`${className} text-slate-300`} />;
+  return <FileIcon className={`${className} text-slate-400`} />;
 }
 
-// ---- Preview Modal ----
-function FilePreviewModal({ file, onClose }: { file: FileNode; onClose: () => void }) {
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const [text, setText] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchPreview = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_URL}/files/download/${file.id}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch file");
-
-      const mime = file.mimeType ?? "application/octet-stream";
-
-      if (mime.startsWith("text/")) {
-        const t = await res.text();
-        setText(t);
-      } else {
-        const blob = await res.blob();
-        setBlobUrl(URL.createObjectURL(blob));
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Preview failed");
-    } finally {
-      setLoading(false);
+// ----------------------------------------------------------------------
+// SHARE MODAL COMPONENT
+// ----------------------------------------------------------------------
+function ShareModal({ file, onClose }: { file: FileItem; onClose: () => void }) {
+  const user = useAuthStore((s: AuthState) => s.user);
+  const [copied, setCopied] = useState(false);
+  
+  const createShareLink = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${API_URL}/api/sharing/links`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          fileId: file.id,
+          expiresInDays: 7
+        })
+      });
+      if (!res.ok) throw new Error("Failed to create share link");
+      return res.json();
     }
-  }, [file.id, file.mimeType]);
-
-  // Fetch on mount
-  useState(() => { fetchPreview(); });
-
-  const mime = file.mimeType ?? "";
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-4xl max-h-[90vh] bg-[#12141a] border border-[#1f2229] rounded-2xl flex flex-col overflow-hidden shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#1f2229]">
-          <div className="flex items-center gap-3">
-            <FileNodeIcon file={file} size="w-5 h-5" />
-            <span className="text-white font-semibold truncate max-w-md">{file.name}</span>
-            <span className="text-xs text-gray-500 bg-[#1f2229] px-2 py-0.5 rounded-full">{formatBytes(file.size)}</span>
-          </div>
-          <button onClick={onClose} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-auto flex items-center justify-center bg-[#0b0c10] p-4">
-          {loading && (
-            <div className="flex items-center gap-3 text-gray-400">
-              <Loader2 className="w-6 h-6 animate-spin" />
-              <span>Loading preview...</span>
-            </div>
-          )}
-          {error && <p className="text-rose-400">{error}</p>}
-          {!loading && !error && blobUrl && mime.startsWith("image/") && (
-            <img src={blobUrl} alt={file.name} className="max-w-full max-h-full object-contain rounded-lg" />
-          )}
-          {!loading && !error && blobUrl && (mime.startsWith("video/")) && (
-            <video src={blobUrl} controls className="max-w-full max-h-full rounded-lg" />
-          )}
-          {!loading && !error && blobUrl && (mime.startsWith("audio/")) && (
-            <audio src={blobUrl} controls className="w-full" />
-          )}
-          {!loading && !error && blobUrl && mime === "application/pdf" && (
-            <iframe src={blobUrl} className="w-full h-[70vh] rounded-lg" title={file.name} />
-          )}
-          {!loading && !error && text !== null && (
-            <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono w-full max-h-[60vh] overflow-auto p-4 bg-[#0b0c10] rounded-lg">
-              {text}
-            </pre>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ---- Version History Panel ----
-function VersionHistory({ file, onClose }: { file: FileNode; onClose: () => void }) {
-  const { data, isLoading } = useQuery({
-    queryKey: ["versions", file.id],
-    queryFn: async () => {
-      const res = await fetch(`${API_URL}/files/${file.id}/versions`, { credentials: "include" });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-      return data.data.versions as FileVersion[];
-    },
   });
 
+  const handleCreateAndCopy = async () => {
+    try {
+      const data = await createShareLink.mutateAsync();
+      const shareUrl = `${window.location.origin}/s/${data.token}`;
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to share file");
+    }
+  };
+
   return (
-    <div className="border-t border-[#1f2229] pt-4">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Version History</span>
-        <button onClick={onClose} className="text-gray-500 hover:text-gray-300 transition-colors">
-          <X className="w-3.5 h-3.5" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-cb-surface border border-cb-border w-full max-w-md rounded-2xl shadow-2xl p-6 relative animate-in fade-in zoom-in-95 duration-200">
+        <button 
+          onClick={onClose}
+          className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
+        >
+          <X className="w-5 h-5" />
+        </button>
+        
+        <div className="flex items-center gap-4 mb-6">
+          <div className="w-12 h-12 rounded-xl bg-indigo-500/10 flex items-center justify-center">
+            {getFileIcon(file.type, file.mimeType, "w-6 h-6")}
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-white">Share File</h3>
+            <p className="text-sm text-slate-400 truncate max-w-[250px]">{file.name}</p>
+          </div>
+        </div>
+        
+        <p className="text-slate-300 text-sm mb-6">
+          Create a secure, public link to share this file. Anyone with the link will be able to download it. The link will expire in 7 days.
+        </p>
+
+        <button
+          onClick={handleCreateAndCopy}
+          disabled={createShareLink.isPending}
+          className="w-full h-11 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+        >
+          {createShareLink.isPending ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : copied ? (
+            <>
+              <Check className="w-4 h-4" />
+              Link Copied!
+            </>
+          ) : (
+            <>
+              <Link2 className="w-4 h-4" />
+              Create & Copy Link
+            </>
+          )}
         </button>
       </div>
-      {isLoading ? (
-        <div className="flex items-center gap-2 text-gray-500 text-sm"><Loader2 className="w-4 h-4 animate-spin" /> Loading...</div>
-      ) : !data || data.length === 0 ? (
-        <p className="text-sm text-gray-500">No previous versions.</p>
-      ) : (
-        <div className="space-y-2">
-          {data.map((v) => (
-            <div key={v.id} className="flex items-center justify-between text-xs text-gray-400 bg-[#0b0c10] px-3 py-2 rounded-lg">
-              <span className="font-medium text-gray-300">v{v.versionNumber}</span>
-              <span>{formatBytes(v.size)}</span>
-              <span>{new Date(v.createdAt).toLocaleDateString()}</span>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
 
-// ---- Main Component ----
+// ----------------------------------------------------------------------
+// MAIN COMPONENT
+// ----------------------------------------------------------------------
 export default function FileExplorer() {
-  const [currentFolder, setCurrentFolder] = useState("/");
-  const [selectedFile, setSelectedFile] = useState<FileNode | null>(null);
-  const [createdShareLink, setCreatedShareLink] = useState<string | null>(null);
-  const [previewFile, setPreviewFile] = useState<FileNode | null>(null);
-  const [showVersions, setShowVersions] = useState(false);
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
-  const [showAgentDropdown, setShowAgentDropdown] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const queryClient = useQueryClient();
   const user = useAuthStore((s: AuthState) => s.user);
-  const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch user's agents for multi-agent selector
-  const { data: agents = [] } = useQuery({
-    queryKey: ["my-agents"],
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  const [folderHistory, setFolderHistory] = useState<{id: string | null, name: string}[]>([{id: null, name: "My Files"}]);
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  // Modals
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
+  // Queries
+  const { data: files = [], isLoading, error, refetch } = useQuery({
+    queryKey: ["files", currentFolderId],
     queryFn: async () => {
-      const res = await fetch(`${API_URL}/agents/mine`, { credentials: "include" });
-      const data = await res.json();
-      if (!data.success) return [] as AgentNode[];
-      return data.data.agents as AgentNode[];
-    },
-  });
-
-  const onlineAgents = agents.filter((a) => a.status === "ONLINE");
-  const selectedAgent = agents.find((a) => a.id === selectedAgentId) ?? onlineAgents[0] ?? null;
-
-  const shareMutation = useMutation({
-    mutationFn: async (fileId: string) => {
-      const res = await fetch(`${API_URL}/sharing`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileId }),
+      const url = currentFolderId 
+        ? `${API_URL}/api/files?parentId=${currentFolderId}`
+        : `${API_URL}/api/files`;
+      
+      const res = await fetch(url, {
+        credentials: "include"
       });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-      return data.data.token as string;
+      if (!res.ok) throw new Error("Failed to fetch files");
+      return res.json() as Promise<FileItem[]>;
     },
-    onSuccess: (token) => {
-      const shareUrl = `${window.location.origin}/s/${token}`;
-      setCreatedShareLink(shareUrl);
-    },
-    onError: (err: Error) => { alert(`Sharing failed: ${err.message}`); },
+    enabled: !!user
   });
 
-  const trashMutation = useMutation({
-    mutationFn: async (fileId: string) => {
-      const res = await fetch(`${API_URL}/files/${fileId}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["files", currentFolder] });
-      setSelectedFile(null);
-    },
-    onError: (err: Error) => { alert(`Delete failed: ${err.message}`); },
-  });
-
-  const { data: files = [], isLoading, error } = useQuery({
-    queryKey: ["files", currentFolder, selectedAgentId],
+  const { data: activeNodes = [] } = useQuery({
+    queryKey: ["nodes", "active"],
     queryFn: async () => {
-      const agentParam = selectedAgentId ? `&agentId=${selectedAgentId}` : "";
-      const res = await fetch(`${API_URL}/files?folder=${encodeURIComponent(currentFolder)}${agentParam}`, {
-        credentials: "include",
+      const res = await fetch(`${API_URL}/api/nodes`, {
+        credentials: "include"
       });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-      return data.data.files as FileNode[];
+      if (!res.ok) return [];
+      const allNodes = await res.json();
+      return allNodes.filter((n: any) => n.status === "online");
     },
+    enabled: !!user
   });
 
+  const hasNodes = activeNodes.length > 0;
+
+  // Mutations
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append("file", file);
-      const agentParam = selectedAgent ? `&agentId=${selectedAgent.id}` : "";
-      const res = await fetch(
-        `${API_URL}/files/upload?folder=${encodeURIComponent(currentFolder)}${agentParam}`,
-        { method: "POST", credentials: "include", body: formData }
-      );
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-      return data.data;
+      if (currentFolderId) {
+        formData.append("parentId", currentFolderId);
+      }
+      
+      const res = await fetch(`${API_URL}/api/files/upload`, {
+        method: "POST",
+        credentials: "include",
+        body: formData
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(()=>({}));
+        throw new Error(errData.error || "Upload failed");
+      }
+      return res.json();
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["files", currentFolder] }); },
-    onError: (err: Error) => { alert(`Upload failed: ${err.message}`); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["files", currentFolderId] });
+      queryClient.invalidateQueries({ queryKey: ["quota"] });
+    },
+    onError: (err: any) => {
+      alert(`Upload failed: ${err.message}`);
+    }
   });
 
-  const handleUploadClick = () => fileInputRef.current?.click();
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`${API_URL}/api/files/${id}`, {
+        method: "DELETE",
+        credentials: "include"
+      });
+      if (!res.ok) throw new Error("Failed to delete");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["files", currentFolderId] });
+      setSelectedFileId(null);
+    }
+  });
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) uploadMutation.mutate(file);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+  const createFolderMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const res = await fetch(`${API_URL}/api/files/folder`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json"
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          name,
+          parentId: currentFolderId
+        })
+      });
+      if (!res.ok) throw new Error("Failed to create folder");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["files", currentFolderId] });
+    }
+  });
+
+  // Handlers
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      if (!hasNodes) {
+        alert("No active storage nodes available. Please add a node first.");
+        return;
+      }
+      const file = e.target.files[0];
+      uploadMutation.mutate(file);
+    }
   };
 
-  const navigateToFolder = (path: string) => {
-    setCurrentFolder(path);
-    setSelectedFile(null);
+  const handleCreateFolder = () => {
+    const name = prompt("Folder name:");
+    if (name && name.trim()) {
+      createFolderMutation.mutate(name.trim());
+    }
   };
 
-  const handleDownload = (file: FileNode) => {
-    window.location.href = `${API_URL}/files/download/${file.id}`;
+  const navigateToFolder = (folder: FileItem) => {
+    setCurrentFolderId(folder.id);
+    setFolderHistory(prev => [...prev, { id: folder.id, name: folder.name }]);
+    setSelectedFileId(null);
   };
 
-  const pathParts = currentFolder === "/" ? [] : currentFolder.split("/").filter(Boolean);
+  const navigateUpTo = (index: number) => {
+    const target = folderHistory[index];
+    setCurrentFolderId(target.id);
+    setFolderHistory(prev => prev.slice(0, index + 1));
+    setSelectedFileId(null);
+  };
 
+  const handleDownload = async (file: FileItem) => {
+    try {
+      const res = await fetch(`${API_URL}/api/files/${file.id}/download`, {
+        credentials: "include"
+      });
+      if (!res.ok) throw new Error("Download failed");
+      
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to download file");
+    }
+  };
+
+  // Filter & Sort
+  const filteredFiles = files.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const sortedFiles = [...filteredFiles].sort((a, b) => {
+    if (a.type === "folder" && b.type !== "folder") return -1;
+    if (a.type !== "folder" && b.type === "folder") return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  const selectedFile = files.find(f => f.id === selectedFileId);
+
+  // ----------------------------------------------------------------------
+  // RENDER
+  // ----------------------------------------------------------------------
   return (
-    <div className="flex h-full">
-      {/* Preview Modal */}
-      {previewFile && (
-        <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
-      )}
-
-      {/* Main File Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-
-        {/* Topbar / Toolbar */}
-        <div className="h-16 flex items-center justify-between px-6 border-b border-[#1f2229] bg-[#12141a]">
+    <div className="flex h-full bg-cb-bg text-white">
+      
+      {/* LEFT CONTENT AREA */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden border-r border-cb-border">
+        
+        {/* TOP TOOLBAR */}
+        <div className="h-16 border-b border-cb-border flex items-center justify-between px-6 bg-cb-bg/50 backdrop-blur-md">
+          
           {/* Breadcrumbs */}
-          <div className="flex items-center text-sm">
-            <button
-              onClick={() => navigateToFolder("/")}
-              className="p-1.5 rounded-md text-gray-400 hover:bg-white/10 hover:text-gray-200 transition-colors"
-            >
-              <Home className="w-4 h-4" />
-            </button>
-            {pathParts.map((part, idx) => {
-              const fullPath = "/" + pathParts.slice(0, idx + 1).join("/");
-              return (
-                <div key={fullPath} className="flex items-center">
-                  <ChevronRight className="w-4 h-4 mx-1 text-gray-600" />
-                  <button
-                    onClick={() => navigateToFolder(fullPath)}
-                    className="px-2 py-1 rounded-md text-gray-300 hover:bg-white/10 hover:text-gray-100 transition-colors"
-                  >
-                    {part}
-                  </button>
-                </div>
-              );
-            })}
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar mask-fade-right">
+            {folderHistory.map((hist, i) => (
+              <div key={hist.id || 'root'} className="flex items-center shrink-0">
+                {i > 0 && <ChevronRight className="w-4 h-4 text-slate-500 mx-2" />}
+                <button
+                  onClick={() => navigateUpTo(i)}
+                  className={`text-sm font-medium transition-colors hover:text-white ${
+                    i === folderHistory.length - 1 ? "text-white" : "text-slate-400"
+                  }`}
+                >
+                  {hist.name}
+                </button>
+              </div>
+            ))}
           </div>
 
+          {/* Right Toolbar Actions */}
           <div className="flex items-center gap-3">
-            {/* Multi-agent selector — only shown to admins */}
-            {isAdmin && agents.length > 1 && (
-              <div className="relative">
-                <button
-                  onClick={() => setShowAgentDropdown(!showAgentDropdown)}
-                  className="flex items-center gap-2 px-3 py-2 bg-[#1f2229] hover:bg-white/10 text-gray-300 text-sm rounded-lg transition-colors border border-[#2a2d38]"
-                >
-                  <Server className="w-3.5 h-3.5" />
-                  <span className="max-w-[80px] truncate">
-                    {selectedAgent ? selectedAgent.cloudId.substring(0, 8) + "…" : "All nodes"}
-                  </span>
-                  <ChevronDown className="w-3 h-3 text-gray-500" />
-                </button>
-                {showAgentDropdown && (
-                  <div className="absolute right-0 top-10 z-20 bg-[#12141a] border border-[#1f2229] rounded-xl shadow-2xl min-w-[200px] py-1">
-                    <button
-                      onClick={() => { setSelectedAgentId(null); setShowAgentDropdown(false); }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 transition-colors"
-                    >
-                      All nodes
-                    </button>
-                    {agents.map((a) => (
-                      <button
-                        key={a.id}
-                        onClick={() => { setSelectedAgentId(a.id); setShowAgentDropdown(false); }}
-                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-white/5 transition-colors flex items-center gap-2"
-                      >
-                        <span className={`w-1.5 h-1.5 rounded-full ${a.status === "ONLINE" ? "bg-emerald-400" : "bg-gray-600"}`} />
-                        <span className="text-gray-300 font-mono text-xs">{a.cloudId.substring(0, 12)}…</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+            
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="bg-cb-surface border border-cb-border rounded-lg pl-9 pr-4 py-1.5 text-sm w-48 focus:w-64 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none"
+              />
+            </div>
 
-            <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
+            <div className="h-6 w-px bg-cb-border mx-1"></div>
+
+            <div className="flex items-center bg-cb-surface rounded-lg p-0.5 border border-cb-border">
+              <button 
+                onClick={() => setViewMode("list")}
+                className={`p-1.5 rounded-md transition-colors ${viewMode === "list" ? "bg-white/10 text-white" : "text-slate-400 hover:text-white"}`}
+              >
+                <List className="w-4 h-4" />
+              </button>
+              <button 
+                onClick={() => setViewMode("grid")}
+                className={`p-1.5 rounded-md transition-colors ${viewMode === "grid" ? "bg-white/10 text-white" : "text-slate-400 hover:text-white"}`}
+              >
+                <Grid className="w-4 h-4" />
+              </button>
+            </div>
+
             <button
-              onClick={handleUploadClick}
-              disabled={uploadMutation.isPending}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+              onClick={handleCreateFolder}
+              className="p-2 text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors border border-transparent hover:border-white/10"
+              title="New Folder"
+            >
+              <FolderPlus className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadMutation.isPending || !hasNodes}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                hasNodes 
+                  ? "bg-indigo-600 hover:bg-indigo-500 text-white" 
+                  : "bg-slate-800 text-slate-500 cursor-not-allowed"
+              }`}
             >
               {uploadMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-              {uploadMutation.isPending ? "Uploading..." : "Upload File"}
+              Upload
             </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              onChange={handleFileSelect}
+            />
           </div>
         </div>
 
-        {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-6 bg-[#0b0c10]">
-          {error ? (
-            <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg">
-              Failed to load files: {(error as Error).message}
+        {/* NODE STATUS WARNING */}
+        {!hasNodes && (
+          <div className="bg-rose-500/10 border-b border-rose-500/20 px-6 py-3 flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-rose-400" />
+            <p className="text-sm text-rose-200">
+              You don't have any active storage nodes. Uploads are disabled until a node is connected and online.
+            </p>
+          </div>
+        )}
+
+        {/* FILE LISTING AREA */}
+        <div className="flex-1 overflow-y-auto p-6 scrollbar-custom">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center h-64 text-slate-400">
+              <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mb-4" />
+              <p>Loading files...</p>
             </div>
-          ) : isLoading ? (
-            <div className="flex items-center justify-center h-full text-gray-500 gap-3">
-              <Loader2 className="w-6 h-6 animate-spin" />
-              <span>Loading files...</span>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center h-64 text-rose-400">
+              <AlertCircle className="w-8 h-8 mb-4" />
+              <p>Failed to load files.</p>
+              <button onClick={() => refetch()} className="mt-4 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm text-white">Retry</button>
             </div>
-          ) : files.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-gray-500">
-              <Folder className="w-16 h-16 text-[#1f2229] mb-4" />
-              <p>This folder is empty</p>
+          ) : sortedFiles.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 text-slate-400">
+              <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-4">
+                <FolderOpen className="w-8 h-8 text-slate-500" />
+              </div>
+              <p className="text-lg font-medium text-white mb-1">Folder is empty</p>
+              <p className="text-sm">Upload files or create folders to get started.</p>
+            </div>
+          ) : viewMode === "grid" ? (
+            // GRID VIEW
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+              {sortedFiles.map(file => {
+                const isSelected = selectedFileId === file.id;
+                return (
+                  <div
+                    key={file.id}
+                    onClick={() => setSelectedFileId(file.id)}
+                    onDoubleClick={() => file.type === "folder" && navigateToFolder(file)}
+                    className={`group relative p-4 rounded-2xl cursor-pointer transition-all duration-200 border ${
+                      isSelected 
+                        ? "bg-indigo-500/10 border-indigo-500/50 shadow-[0_0_20px_rgba(99,102,241,0.15)]" 
+                        : "bg-cb-surface border-cb-border hover:bg-cb-surface-2 hover:border-white/10"
+                    }`}
+                  >
+                    <div className="flex items-center justify-center h-24 mb-3">
+                      <div className="transition-transform duration-200 group-hover:scale-110">
+                        {getFileIcon(file.type, file.mimeType, "w-12 h-12")}
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-medium text-slate-200 truncate">{file.name}</p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {file.type === "folder" ? "Folder" : formatBytes(file.size)}
+                      </p>
+                    </div>
+                    {isSelected && (
+                      <div className="absolute top-3 right-3 text-indigo-400 bg-cb-bg rounded-full p-0.5">
+                        <CheckCircle2 className="w-4 h-4" />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ) : (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-4">
-              {files.map((file) => (
-                <div
-                  key={file.id}
-                  onClick={() => {
-                    if (file.isFolder) { navigateToFolder(file.path); }
-                    else { setSelectedFile(file); setShowVersions(false); }
-                  }}
-                  onDoubleClick={() => { if (!file.isFolder && isPreviewable(file)) setPreviewFile(file); }}
-                  className={`group relative flex flex-col items-center p-4 rounded-xl border border-transparent hover:border-[#1f2229] hover:bg-[#12141a] cursor-pointer transition-all ${
-                    selectedFile?.id === file.id ? "bg-[#12141a] border-indigo-500/50 ring-1 ring-indigo-500/50" : ""
-                  }`}
-                >
-                  <div className="mb-3">
-                    <FileNodeIcon file={file} />
-                  </div>
-                  <div className="w-full text-center">
-                    <div className="text-sm font-medium text-gray-200 truncate group-hover:text-white" title={file.name}>
-                      {file.name}
+            // LIST VIEW
+            <div className="w-full">
+              <div className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-cb-border text-xs font-semibold text-slate-400 uppercase tracking-wider sticky top-0 bg-cb-bg/95 backdrop-blur-sm z-10">
+                <div className="col-span-6 md:col-span-5">Name</div>
+                <div className="col-span-3 hidden md:block">Date Modified</div>
+                <div className="col-span-3 md:col-span-2 text-right">Size</div>
+                <div className="col-span-3 md:col-span-2 text-right">Kind</div>
+              </div>
+              
+              <div className="flex flex-col gap-1 mt-2">
+                {sortedFiles.map(file => {
+                  const isSelected = selectedFileId === file.id;
+                  return (
+                    <div
+                      key={file.id}
+                      onClick={() => setSelectedFileId(file.id)}
+                      onDoubleClick={() => file.type === "folder" && navigateToFolder(file)}
+                      className={`grid grid-cols-12 gap-4 px-4 py-3 rounded-xl cursor-pointer items-center transition-colors border ${
+                        isSelected 
+                          ? "bg-indigo-500/10 border-indigo-500/30" 
+                          : "bg-transparent border-transparent hover:bg-cb-surface"
+                      }`}
+                    >
+                      <div className="col-span-6 md:col-span-5 flex items-center gap-3 overflow-hidden">
+                        {getFileIcon(file.type, file.mimeType)}
+                        <span className="text-sm font-medium text-slate-200 truncate">{file.name}</span>
+                      </div>
+                      <div className="col-span-3 hidden md:block text-xs text-slate-500">
+                        {formatDate(file.updatedAt)}
+                      </div>
+                      <div className="col-span-3 md:col-span-2 text-xs text-slate-500 text-right">
+                        {file.type === "folder" ? "--" : formatBytes(file.size)}
+                      </div>
+                      <div className="col-span-3 md:col-span-2 text-xs text-slate-500 text-right truncate">
+                        {file.type === "folder" ? "Folder" : file.mimeType || "File"}
+                      </div>
                     </div>
-                  </div>
-                </div>
-              ))}
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* Right Details Panel */}
-      {selectedFile && !selectedFile.isFolder && (
-        <div className="w-80 bg-[#12141a] border-l border-[#1f2229] flex flex-col">
-          <div className="p-6 border-b border-[#1f2229] flex justify-center">
-            <FileNodeIcon file={selectedFile} />
-          </div>
-          <div className="p-6 flex-1 flex flex-col gap-5 overflow-y-auto">
-            <div>
-              <h3 className="text-lg font-semibold text-white break-words">{selectedFile.name}</h3>
-              <p className="text-sm text-gray-400 mt-1">{selectedFile.mimeType || "Unknown type"}</p>
+      {/* RIGHT SIDEBAR - DETAILS PANEL */}
+      <div className={`w-80 bg-cb-surface flex flex-col transition-all duration-300 ease-in-out ${
+        selectedFile ? "translate-x-0 border-l border-cb-border" : "w-0 overflow-hidden opacity-0"
+      }`}>
+        {selectedFile && (
+          <>
+            <div className="h-16 border-b border-cb-border flex items-center justify-between px-5 shrink-0">
+              <h3 className="font-semibold text-white">Details</h3>
+              <button 
+                onClick={() => setSelectedFileId(null)}
+                className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
-
-            <div className="space-y-3">
-              <div>
-                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Size</div>
-                <div className="text-sm text-gray-300">{formatBytes(selectedFile.size)}</div>
+            
+            <div className="flex-1 overflow-y-auto p-5 scrollbar-custom">
+              
+              {/* File Preview Icon Block */}
+              <div className="bg-cb-bg rounded-2xl p-8 flex flex-col items-center justify-center mb-6 border border-cb-border relative overflow-hidden group">
+                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                {getFileIcon(selectedFile.type, selectedFile.mimeType, "w-16 h-16 mb-4 relative z-10")}
+                <p className="text-sm font-medium text-white text-center break-words w-full truncate relative z-10">{selectedFile.name}</p>
+                {selectedFile.type !== "folder" && (
+                  <p className="text-xs text-slate-500 mt-1 relative z-10">{formatBytes(selectedFile.size)}</p>
+                )}
               </div>
-              <div>
-                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Modified</div>
-                <div className="text-sm text-gray-300">{new Date(selectedFile.updatedAt).toLocaleString()}</div>
-              </div>
-              {/* Only show storage node ID to admins */}
-              {isAdmin && (
-                <div>
-                  <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Storage Node</div>
-                  <div className="flex items-center gap-2 text-sm text-gray-300 font-mono">
-                    <HardDrive className="w-4 h-4 text-cyan-500" />
-                    {selectedFile.agentId.substring(0, 8)}...
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Version History toggle */}
-            {showVersions && (
-              <VersionHistory file={selectedFile} onClose={() => setShowVersions(false)} />
-            )}
-
-            <div className="mt-auto pt-4 space-y-2">
-              {isPreviewable(selectedFile) && (
+              
+              {/* Actions Grid */}
+              <div className="grid grid-cols-2 gap-2 mb-6">
+                {selectedFile.type !== "folder" && (
+                  <button
+                    onClick={() => handleDownload(selectedFile)}
+                    className="flex flex-col items-center justify-center gap-2 bg-cb-bg hover:bg-white/5 border border-cb-border hover:border-white/10 p-3 rounded-xl transition-colors text-slate-300 hover:text-white"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span className="text-xs font-medium">Download</span>
+                  </button>
+                )}
+                
+                {selectedFile.type !== "folder" && (
+                  <button
+                    onClick={() => setIsShareModalOpen(true)}
+                    className="flex flex-col items-center justify-center gap-2 bg-cb-bg hover:bg-white/5 border border-cb-border hover:border-white/10 p-3 rounded-xl transition-colors text-slate-300 hover:text-white"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    <span className="text-xs font-medium">Share Link</span>
+                  </button>
+                )}
+                
                 <button
-                  onClick={() => setPreviewFile(selectedFile)}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 text-white text-sm font-medium rounded-lg transition-colors border border-[#1f2229]"
+                  onClick={() => {
+                    if (confirm("Are you sure you want to move this to trash?")) {
+                      deleteMutation.mutate(selectedFile.id);
+                    }
+                  }}
+                  className={`flex flex-col items-center justify-center gap-2 bg-cb-bg hover:bg-rose-500/10 border border-cb-border hover:border-rose-500/20 p-3 rounded-xl transition-colors text-rose-400 ${selectedFile.type === 'folder' ? 'col-span-2' : ''}`}
                 >
-                  <Eye className="w-4 h-4" />
-                  Preview
+                  <Trash2 className="w-4 h-4" />
+                  <span className="text-xs font-medium">Delete</span>
                 </button>
-              )}
-              <button
-                onClick={() => handleDownload(selectedFile)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 text-white text-sm font-medium rounded-lg transition-colors border border-[#1f2229]"
-              >
-                <Download className="w-4 h-4" />
-                Download
-              </button>
-              <button
-                onClick={() => setShowVersions(!showVersions)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-300 text-sm font-medium rounded-lg transition-colors border border-[#1f2229]"
-              >
-                <History className="w-4 h-4" />
-                Version History
-              </button>
-              <button
-                onClick={() => shareMutation.mutate(selectedFile.id)}
-                disabled={shareMutation.isPending}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-              >
-                {shareMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
-                {shareMutation.isPending ? "Generating..." : "Share File"}
-              </button>
-              <button
-                onClick={() => {
-                  if (confirm(`Move "${selectedFile.name}" to trash?`)) trashMutation.mutate(selectedFile.id);
-                }}
-                disabled={trashMutation.isPending}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-sm font-medium rounded-lg transition-colors border border-rose-500/20 disabled:opacity-50"
-              >
-                {trashMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                Move to Trash
-              </button>
+              </div>
+              
+              {/* Information List */}
+              <div className="space-y-4 text-sm">
+                <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Information</h4>
+                
+                <div className="flex justify-between border-b border-cb-border/50 pb-2">
+                  <span className="text-slate-400">Type</span>
+                  <span className="text-slate-200">{selectedFile.type === "folder" ? "Folder" : selectedFile.mimeType || "File"}</span>
+                </div>
+                
+                {selectedFile.type !== "folder" && (
+                  <div className="flex justify-between border-b border-cb-border/50 pb-2">
+                    <span className="text-slate-400">Size</span>
+                    <span className="text-slate-200">{formatBytes(selectedFile.size)}</span>
+                  </div>
+                )}
+                
+                <div className="flex justify-between border-b border-cb-border/50 pb-2">
+                  <span className="text-slate-400">Modified</span>
+                  <span className="text-slate-200">{formatDate(selectedFile.updatedAt)}</span>
+                </div>
+                
+                <div className="flex justify-between border-b border-cb-border/50 pb-2">
+                  <span className="text-slate-400">Created</span>
+                  <span className="text-slate-200">{formatDate(selectedFile.createdAt)}</span>
+                </div>
+                
+                {selectedFile.cid && (
+                  <div className="flex flex-col gap-1 border-b border-cb-border/50 pb-2">
+                    <span className="text-slate-400">IPFS CID</span>
+                    <span className="text-slate-200 text-xs font-mono break-all">{selectedFile.cid}</span>
+                  </div>
+                )}
+                
+                {selectedFile.nodeId && (
+                  <div className="flex justify-between border-b border-cb-border/50 pb-2">
+                    <span className="text-slate-400">Storage Node</span>
+                    <span className="text-slate-200 truncate ml-4">{selectedFile.nodeId}</span>
+                  </div>
+                )}
+              </div>
+              
             </div>
-          </div>
-        </div>
+          </>
+        )}
+      </div>
+      
+      {/* Modals */}
+      {isShareModalOpen && selectedFile && (
+        <ShareModal 
+          file={selectedFile} 
+          onClose={() => setIsShareModalOpen(false)} 
+        />
       )}
-
-      {/* Share Link Modal */}
-      {createdShareLink && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-[#12141a] border border-[#1f2229] rounded-2xl p-6 w-full max-w-md shadow-2xl">
-            <h3 className="text-lg font-bold text-white mb-2">Share Link Generated</h3>
-            <p className="text-sm text-gray-400 mb-4">Anyone with this link can view and download this file.</p>
-            <div className="flex items-center gap-2 bg-black border border-[#1f2229] p-2 rounded-lg mb-4">
-              <input
-                type="text"
-                readOnly
-                value={createdShareLink}
-                className="flex-1 bg-transparent text-sm text-gray-200 focus:outline-none overflow-x-auto select-all"
-                id="share-link-input"
-              />
-              <button
-                onClick={() => { navigator.clipboard.writeText(createdShareLink); alert("Copied!"); }}
-                className="px-3 py-1 bg-indigo-500 hover:bg-indigo-600 text-xs font-semibold rounded text-white"
-              >
-                Copy
-              </button>
-            </div>
-            <div className="flex justify-end">
-              <button
-                onClick={() => setCreatedShareLink(null)}
-                className="px-4 py-2 bg-[#1f2229] hover:bg-white/10 text-sm font-medium rounded-lg transition-colors border border-[#1f2229] text-white"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      
     </div>
   );
 }

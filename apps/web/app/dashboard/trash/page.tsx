@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Trash2, RotateCcw, AlertTriangle, File as FileIcon, Folder, FileImage, FileText, FileArchive } from "lucide-react";
+import { Loader2, Trash2, RotateCcw, AlertTriangle, File as FileIcon, Folder, FileImage, FileText, FileArchive, ShieldAlert } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -20,20 +20,19 @@ type FileNode = {
 
 function formatBytes(bytesStr: string) {
   const bytes = parseInt(bytesStr, 10);
-  if (isNaN(bytes) || bytes === 0) return "0 Bytes";
+  if (isNaN(bytes) || bytes === 0) return "0 B";
   const k = 1024;
-  const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
-function FileNodeIcon({ file, size = "w-10 h-10" }: { file: FileNode; size?: string }) {
+function FileNodeIcon({ file, size = "w-5 h-5" }: { file: FileNode; size?: string }) {
   if (file.isFolder) return <Folder className={`${size} text-indigo-400 fill-indigo-400/20`} />;
   if (file.mimeType?.includes("image")) return <FileImage className={`${size} text-cyan-400`} />;
-  if (file.mimeType?.includes("text") || file.mimeType?.includes("pdf")) return <FileText className={`${size} text-gray-400`} />;
-  if (file.mimeType?.includes("zip") || file.mimeType?.includes("tar")) return <FileArchive className={`${size} text-orange-400`} />;
-  if (file.mimeType?.includes("video") || file.mimeType?.includes("audio")) return <FileImage className={`${size} text-purple-400`} />;
-  return <FileIcon className={`${size} text-gray-400`} />;
+  if (file.mimeType?.includes("text") || file.mimeType?.includes("pdf")) return <FileText className={`${size} text-slate-300`} />;
+  if (file.mimeType?.includes("zip") || file.mimeType?.includes("tar")) return <FileArchive className={`${size} text-amber-400`} />;
+  return <FileIcon className={`${size} text-slate-400`} />;
 }
 
 export default function TrashPage() {
@@ -77,94 +76,108 @@ export default function TrashPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["files", "trash"] });
     },
-    onError: (err: Error) => { alert(`Delete failed: ${err.message}`); },
+    onError: (err: Error) => { alert(`Permanent deletion failed: ${err.message}`); },
   });
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 bg-[#0b0c10] h-full">
-      <div className="h-16 flex items-center justify-between px-6 border-b border-[#1f2229] bg-[#12141a]">
+    <div className="p-8 max-w-7xl mx-auto space-y-6">
+
+      {/* Header Banner */}
+      <div className="flex items-center justify-between pb-6 border-b border-white/[0.07]">
         <div className="flex items-center gap-3">
-          <Trash2 className="w-5 h-5 text-gray-400" />
-          <h1 className="text-lg font-semibold text-white">Trash</h1>
+          <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+            <Trash2 className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-white tracking-tight">Trash Manager</h2>
+            <p className="text-xs text-slate-400">Items in trash are retained for 30 days before permanent deletion</p>
+          </div>
         </div>
-        <div className="text-sm text-gray-400">
-          Files are kept for 30 days before permanent deletion.
+
+        <div className="flex items-center gap-2 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-full font-medium">
+          <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+          Auto-purged after 30 days
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6">
-        {error ? (
-          <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg">
-            Failed to load trash: {(error as Error).message}
+      {error ? (
+        <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs rounded-xl">
+          Failed to load trash: {(error as Error).message}
+        </div>
+      ) : isLoading ? (
+        <div className="flex items-center justify-center py-20 text-slate-500 gap-3">
+          <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
+          <span className="text-xs font-medium">Loading deleted items...</span>
+        </div>
+      ) : files.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center glass-card rounded-3xl p-8 space-y-3">
+          <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center text-slate-600">
+            <Trash2 className="w-7 h-7" />
           </div>
-        ) : isLoading ? (
-          <div className="flex items-center justify-center h-full text-gray-500 gap-3">
-            <Loader2 className="w-6 h-6 animate-spin" />
-            <span>Loading trash...</span>
+          <div>
+            <p className="text-sm font-semibold text-slate-400">Trash is completely empty</p>
+            <p className="text-xs text-slate-600 max-w-sm mt-1">
+              Deleted files will appear here until they are permanently removed or restored.
+            </p>
           </div>
-        ) : files.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-gray-500">
-            <Trash2 className="w-16 h-16 text-[#1f2229] mb-4" />
-            <p>Trash is empty</p>
-          </div>
-        ) : (
-          <div className="bg-[#12141a] rounded-xl border border-[#1f2229] overflow-hidden">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-[#1a1c23] border-b border-[#1f2229] text-xs uppercase tracking-wider text-gray-500">
-                  <th className="px-6 py-4 font-medium">Name</th>
-                  <th className="px-6 py-4 font-medium">Size</th>
-                  <th className="px-6 py-4 font-medium">Deleted</th>
-                  <th className="px-6 py-4 font-medium text-right">Actions</th>
+        </div>
+      ) : (
+        <div className="glass-card rounded-3xl border border-white/[0.07] overflow-hidden">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-white/[0.07] bg-white/[0.02] text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                <th className="p-4">Item Name</th>
+                <th className="p-4">Original Path</th>
+                <th className="p-4">Size</th>
+                <th className="p-4">Deleted Date</th>
+                <th className="p-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/[0.04]">
+              {files.map((file) => (
+                <tr key={file.id} className="hover:bg-white/[0.03] transition-colors text-xs text-slate-300">
+                  <td className="p-4 font-semibold text-white flex items-center gap-3">
+                    <FileNodeIcon file={file} />
+                    <span className="truncate max-w-xs">{file.name}</span>
+                  </td>
+                  <td className="p-4 font-mono text-slate-500 text-[11px] truncate max-w-xs">{file.path}</td>
+                  <td className="p-4 text-slate-400 font-mono">{formatBytes(file.size)}</td>
+                  <td className="p-4 text-slate-500 font-mono">
+                    {file.deletedAt ? new Date(file.deletedAt).toLocaleDateString() : "—"}
+                  </td>
+                  <td className="p-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => restoreMutation.mutate(file.id)}
+                        disabled={restoreMutation.isPending || deleteMutation.isPending}
+                        className="px-3 py-1.5 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                        title="Restore to original location"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        Restore
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          if (confirm(`Permanently delete "${file.name}"? This action CANNOT be undone.`)) {
+                            deleteMutation.mutate(file.id);
+                          }
+                        }}
+                        disabled={restoreMutation.isPending || deleteMutation.isPending}
+                        className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition-colors border border-rose-500/20 disabled:opacity-50"
+                        title="Delete Permanently"
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-[#1f2229]">
-                {files.map((file) => (
-                  <tr key={file.id} className="hover:bg-white/5 transition-colors">
-                    <td className="px-6 py-4 flex items-center gap-3">
-                      <FileNodeIcon file={file} size="w-6 h-6" />
-                      <div>
-                        <div className="text-sm font-medium text-gray-200">{file.name}</div>
-                        <div className="text-xs text-gray-500 font-mono">{file.path}</div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-400">
-                      {formatBytes(file.size)}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-400">
-                      {file.deletedAt ? new Date(file.deletedAt).toLocaleDateString() : ""}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => restoreMutation.mutate(file.id)}
-                          disabled={restoreMutation.isPending || deleteMutation.isPending}
-                          className="p-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-lg transition-colors"
-                          title="Restore"
-                        >
-                          <RotateCcw className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (confirm(`Permanently delete "${file.name}"? This cannot be undone.`)) {
-                              deleteMutation.mutate(file.id);
-                            }
-                          }}
-                          disabled={restoreMutation.isPending || deleteMutation.isPending}
-                          className="p-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg transition-colors"
-                          title="Delete Permanently"
-                        >
-                          <AlertTriangle className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
     </div>
   );
 }

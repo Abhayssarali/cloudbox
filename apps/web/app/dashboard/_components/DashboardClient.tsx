@@ -3,7 +3,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuthStore } from "@/stores/useAuthStore";
 import type { AuthState } from "@/stores/useAuthStore";
-import { HardDrive, CheckCircle2, AlertTriangle, Server, Plus } from "lucide-react";
+import Link from "next/link";
+import {
+  HardDrive, CheckCircle2, AlertTriangle, Server, Plus,
+  FolderOpen, Share2, Wifi, WifiOff, ArrowUpRight,
+  Clock, Zap, X, Copy, Check, FileText, Image, Film, Archive,
+  ShieldCheck, Activity, ChevronRight
+} from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -12,13 +18,13 @@ interface AgentRecord {
   cloudId: string;
   status: "ONLINE" | "OFFLINE";
   lastHeartbeat: string | null;
+  version: string | null;
   createdAt: string;
 }
 
-interface ApiResponse<T> {
-  success: boolean;
-  data: T;
-  error?: string;
+interface UserWithUsage {
+  usedBytes: number;
+  quotaBytes: number;
 }
 
 function formatBytes(bytes: number): string {
@@ -29,253 +35,488 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
 }
 
-interface UserWithUsage {
-  usedBytes: number;
-  quotaBytes: number;
-}
-
-// ---- Storage Usage widget shown to regular users ----
-function StorageUsageWidget() {
-  const [usage, setUsage] = useState<UserWithUsage | null>(null);
-
-  useEffect(() => {
-    fetch(`${API_URL}/auth/me`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.success) {
-          setUsage({ usedBytes: Number(d.data.user.usedBytes), quotaBytes: Number(d.data.user.quotaBytes) });
-        }
-      })
-      .catch(() => {/* silent */});
-  }, []);
-
-  const used = usage?.usedBytes ?? 0;
-  const quota = usage?.quotaBytes ?? 0;
-  const pct = quota > 0 ? Math.min(100, (used / quota) * 100) : 0;
-  const isWarning = pct >= 80;
-  const isCritical = pct >= 95;
-
-  return (
-    <div className="usage-card">
-      <div className="usage-card__header">
-        <div className="usage-card__icon">
-          <HardDrive className="w-5 h-5 text-indigo-400" />
-        </div>
-        <div>
-          <h3 className="usage-card__title">Your Storage</h3>
-          <p className="usage-card__sub">Managed by your administrator</p>
-        </div>
-      </div>
-
-      <div className="usage-card__bar-wrap">
-        <div className="usage-card__bar-track">
-          <div
-            className={`usage-card__bar-fill ${isCritical ? "usage-card__bar-fill--crit" : isWarning ? "usage-card__bar-fill--warn" : ""}`}
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-        <div className="usage-card__bar-labels">
-          <span className={`usage-card__used ${isCritical ? "usage-card__used--crit" : isWarning ? "usage-card__used--warn" : ""}`}>
-            {isCritical && <AlertTriangle className="w-3.5 h-3.5 inline mr-1" />}
-            {formatBytes(used)} used
-          </span>
-          <span className="usage-card__quota">
-            {quota > 0 ? formatBytes(quota) + " total" : "Unlimited"}
-          </span>
-        </div>
-      </div>
-
-      <div className="usage-card__footer">
-        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-        <span>Storage is automatically managed — just upload your files</span>
-      </div>
-    </div>
-  );
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const secs = Math.floor(diff / 1000);
+  if (secs < 60) return "just now";
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }
 
 export default function DashboardClient() {
   const user = useAuthStore((s: AuthState) => s.user);
   const [agents, setAgents] = useState<AgentRecord[]>([]);
+  const [usage, setUsage] = useState<UserWithUsage | null>(null);
+  const [fileStats, setFileStats] = useState<{ totalFiles: number; totalShares: number }>({ totalFiles: 0, totalShares: 0 });
   const [claimCode, setClaimCode] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingNode, setIsLoadingNode] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
 
   const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
+  const username = user?.email?.split("@")[0] ?? "User";
 
-  const fetchAgents = useCallback(async () => {
+  // Fetch agents, user info & file counts
+  const fetchDashboardData = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/agents`, { credentials: "include" });
-      const data = (await res.json()) as ApiResponse<{ agents: AgentRecord[] }>;
-      if (data.success) setAgents(data.data.agents);
+      // Auth me
+      const meRes = await fetch(`${API_URL}/auth/me`, { credentials: "include" });
+      const meData = await meRes.json();
+      if (meData.success) {
+        setUsage({
+          usedBytes: Number(meData.data.user.usedBytes || 0),
+          quotaBytes: Number(meData.data.user.quotaBytes || 0),
+        });
+      }
+
+      // Agents list
+      const agentRes = await fetch(`${API_URL}/agents`, { credentials: "include" });
+      const agentData = await agentRes.json();
+      if (agentData.success && Array.isArray(agentData.data?.agents)) {
+        setAgents(agentData.data.agents);
+      }
+
+      // Files list for metrics
+      const filesRes = await fetch(`${API_URL}/files`, { credentials: "include" });
+      const filesData = await filesRes.json();
+
+      const shareRes = await fetch(`${API_URL}/sharing`, { credentials: "include" });
+      const shareData = await shareRes.json();
+
+      setFileStats({
+        totalFiles: filesData.success && Array.isArray(filesData.data?.files) ? filesData.data.files.length : 0,
+        totalShares: shareData.success && Array.isArray(shareData.data?.shareLinks) ? shareData.data.shareLinks.length : 0,
+      });
     } catch {
-      // silently fail on polling error
+      // silent
     }
   }, []);
 
-  // Poll every 10 seconds for live status — only for admins who own nodes
   useEffect(() => {
-    if (!isAdmin) return;
-    const initialFetch = setTimeout(fetchAgents, 0);
-    const interval = setInterval(fetchAgents, 10_000);
-    return () => {
-      clearTimeout(initialFetch);
-      clearInterval(interval);
-    };
-  }, [fetchAgents, isAdmin]);
+    fetchDashboardData();
+    const interval = setInterval(fetchDashboardData, 15_000);
+    return () => clearInterval(interval);
+  }, [fetchDashboardData]);
 
   async function handleClaimNode() {
-    setIsLoading(true);
+    setIsLoadingNode(true);
     setError(null);
     try {
       const res = await fetch(`${API_URL}/agents/claim`, { method: "POST", credentials: "include" });
-      const data = (await res.json()) as ApiResponse<{ code: string }>;
-      if (!res.ok || !data.success) throw new Error(data.error || "Failed to get claim code");
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "Failed to generate claim code");
       setClaimCode(data.data.code);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setIsLoading(false);
+      setIsLoadingNode(false);
     }
   }
 
+  const copyToClipboard = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedCmd(id);
+    setTimeout(() => setCopiedCmd(null), 2000);
+  };
+
+  const used = usage?.usedBytes ?? 0;
+  const quota = usage?.quotaBytes ?? 0;
+  const pct = quota > 0 ? Math.min(100, Math.round((used / quota) * 100)) : 0;
   const onlineCount = agents.filter((a) => a.status === "ONLINE").length;
 
   return (
-    <div className="flex flex-col flex-1 p-8 overflow-y-auto">
-      <div className="max-w-5xl w-full mx-auto">
-        <div className="dash__hero">
-          <h2>Welcome back, {user?.email?.split("@")[0]}</h2>
-          <p className="dash__hero-sub">
-            {isAdmin
-              ? onlineCount > 0
-                ? `${onlineCount} node${onlineCount > 1 ? "s" : ""} online and ready`
-                : "No nodes online. Start your agent to begin."
-              : "Your personal cloud storage — fast, private, and managed for you."}
-          </p>
+    <div className="p-8 max-w-7xl mx-auto space-y-8">
+
+      {/* ── Ambient Background Glow ── */}
+      <div className="ambient-glow top-0 left-1/3 w-96 h-96 bg-indigo-600" />
+      <div className="ambient-glow top-20 right-1/4 w-80 h-80 bg-violet-600" />
+
+      {/* ── Hero Welcome Banner ── */}
+      <div className="relative overflow-hidden rounded-3xl glass-card p-8 border border-white/[0.08] bg-gradient-to-r from-indigo-950/40 via-slate-900/60 to-slate-950/80">
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-semibold">
+              <Zap className="w-3.5 h-3.5 text-indigo-400" />
+              <span>CloudBox Storage Network Active</span>
+            </div>
+            <h2 className="text-3xl font-extrabold text-white tracking-tight">
+              Welcome back, <span className="bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent">{username}</span> 👋
+            </h2>
+            <p className="text-sm text-slate-400 max-w-xl leading-relaxed">
+              {isAdmin
+                ? onlineCount > 0
+                  ? `Your personal storage server network is online and synchronized across ${onlineCount} active node(s).`
+                  : "No storage nodes currently online. Start your Ubuntu agent daemon to connect."
+                : "Your personal private cloud is ready. Access and manage your files securely."}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Link
+              href="/dashboard/files"
+              className="btn-primary px-5 py-3 rounded-2xl text-sm font-semibold flex items-center gap-2"
+            >
+              <FolderOpen className="w-4 h-4" />
+              Browse Files
+            </Link>
+
+            {isAdmin && (
+              <button
+                onClick={handleClaimNode}
+                disabled={isLoadingNode}
+                className="px-5 py-3 rounded-2xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 text-white text-sm font-semibold transition-all flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4 text-indigo-400" />
+                {isLoadingNode ? "Generating..." : "Add Storage Node"}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Top Summary Metric Cards (4 Grid) ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+
+        {/* Card 1: Storage Used */}
+        <div className="glass-card rounded-2xl p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Used Capacity</span>
+            <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400">
+              <HardDrive className="w-5 h-5" />
+            </div>
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-white tracking-tight">{formatBytes(used)}</div>
+            <div className="text-xs text-slate-400 mt-1 flex items-center justify-between">
+              <span>{quota > 0 ? `of ${formatBytes(quota)} allocated` : "Unlimited storage"}</span>
+              <span className="font-semibold text-indigo-400">{quota > 0 ? `${pct}%` : ""}</span>
+            </div>
+          </div>
+          <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                pct >= 90 ? "bg-rose-500" : pct >= 75 ? "bg-amber-500" : "bg-gradient-to-r from-indigo-500 to-violet-500"
+              }`}
+              style={{ width: `${quota > 0 ? pct : 100}%` }}
+            />
+          </div>
         </div>
 
-        {/* Regular user: show storage usage widget, no node details */}
-        {!isAdmin && <StorageUsageWidget />}
+        {/* Card 2: Storage Nodes */}
+        <div className="glass-card rounded-2xl p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Storage Nodes</span>
+            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
+              <Server className="w-5 h-5" />
+            </div>
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+              {onlineCount} <span className="text-xs font-normal text-slate-400">/ {agents.length} online</span>
+            </div>
+            <div className="text-xs text-emerald-400 font-medium mt-1 flex items-center gap-1.5">
+              <span className={`w-2 h-2 rounded-full ${onlineCount > 0 ? "bg-emerald-400 status-pulse-green" : "bg-slate-500"}`} />
+              {onlineCount > 0 ? "Tunnel Connected" : "Agent Offline"}
+            </div>
+          </div>
+        </div>
 
-        {/* Admin: show storage nodes management panel */}
-        {isAdmin && (
-          <div className="dash__section">
-            <div className="dash__section-header">
-              <h3>Storage Nodes</h3>
-              <button onClick={handleClaimNode} disabled={isLoading} className="dash__btn dash__btn--primary">
-                <Plus className="w-3.5 h-3.5 inline mr-1.5" />
-                {isLoading ? "Generating..." : "Add Node"}
-              </button>
+        {/* Card 3: Total Files */}
+        <div className="glass-card rounded-2xl p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Files</span>
+            <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400">
+              <FolderOpen className="w-5 h-5" />
+            </div>
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-white tracking-tight">{fileStats.totalFiles}</div>
+            <div className="text-xs text-slate-400 mt-1">Files synchronized across nodes</div>
+          </div>
+        </div>
+
+        {/* Card 4: Active Shares */}
+        <div className="glass-card rounded-2xl p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Public Shares</span>
+            <div className="p-2 rounded-xl bg-violet-500/10 text-violet-400">
+              <Share2 className="w-5 h-5" />
+            </div>
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-white tracking-tight">{fileStats.totalShares}</div>
+            <div className="text-xs text-slate-400 mt-1">Active share tokens generated</div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* ── Main Section: Storage Nodes & Activity Split ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* Left 2-Cols: Storage Node Management */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="glass-card rounded-3xl p-6 space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+                  <Server className="w-5 h-5 text-indigo-400" />
+                  Connected Storage Devices
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Ubuntu laptops and machines running the CloudBox Agent daemon
+                </p>
+              </div>
+
+              {isAdmin && (
+                <button
+                  onClick={handleClaimNode}
+                  disabled={isLoadingNode}
+                  className="btn-primary px-4 py-2 rounded-xl text-xs flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Node
+                </button>
+              )}
             </div>
 
-            {error && <p className="dash__error">{error}</p>}
+            {error && (
+              <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs rounded-xl flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-400" />
+                {error}
+              </div>
+            )}
 
             {agents.length === 0 ? (
-              <div className="dash__empty">
-                <Server className="w-12 h-12 mx-auto mb-3 text-gray-700" />
-                <p>No nodes registered yet.</p>
-                <p className="dash__empty-sub">Click <strong>Add Node</strong> to link your first device.</p>
+              <div className="flex flex-col items-center justify-center py-12 text-center bg-white/[0.02] border border-dashed border-white/10 rounded-2xl p-6 space-y-3">
+                <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                  <Server className="w-7 h-7" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-white">No Storage Nodes Registered</p>
+                  <p className="text-xs text-slate-400 max-w-sm">
+                    Install the Agent script on your Ubuntu device to turn it into your private cloud server.
+                  </p>
+                </div>
+                {isAdmin && (
+                  <button
+                    onClick={handleClaimNode}
+                    className="btn-primary px-5 py-2.5 rounded-xl text-xs mt-2"
+                  >
+                    Claim First Device
+                  </button>
+                )}
               </div>
             ) : (
-              <div className="dash__agent-list">
-                {agents.map((agent) => (
-                  <div key={agent.id} className="dash__agent-card">
-                    <div className="dash__agent-info">
-                      <span className={`dash__status-dot ${agent.status === "ONLINE" ? "dash__status-dot--online" : ""}`} />
-                      <div>
-                        <div className="dash__agent-id">{agent.cloudId}</div>
-                        <div className="dash__agent-meta">
-                          {agent.status === "ONLINE"
-                            ? "🟢 Online"
-                            : `🔴 Offline${agent.lastHeartbeat ? ` · Last seen ${new Date(agent.lastHeartbeat).toLocaleString()}` : ""}`}
+              <div className="grid grid-cols-1 gap-3">
+                {agents.map((agent) => {
+                  const isOnline = agent.status === "ONLINE";
+                  return (
+                    <div
+                      key={agent.id}
+                      className={`p-4 rounded-2xl border transition-all flex items-center justify-between ${
+                        isOnline
+                          ? "bg-emerald-500/[0.03] border-emerald-500/20 hover:border-emerald-500/40"
+                          : "bg-white/[0.02] border-white/[0.06] hover:border-white/10"
+                      }`}
+                    >
+                      <div className="flex items-center gap-4 min-w-0">
+                        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 ${
+                          isOnline ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-slate-800 text-slate-500 border border-white/5"
+                        }`}>
+                          {isOnline ? <Wifi className="w-5 h-5" /> : <WifiOff className="w-5 h-5" />}
+                        </div>
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-sm font-bold text-white truncate max-w-[200px] sm:max-w-xs">
+                              {agent.cloudId}
+                            </span>
+                            <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded-full ${
+                              isOnline ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-700/50 text-slate-400"
+                            }`}>
+                              {agent.status}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-4 text-xs text-slate-400 font-mono">
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-slate-500" />
+                              {agent.lastHeartbeat ? `Heartbeat ${timeAgo(agent.lastHeartbeat)}` : "Never synced"}
+                            </span>
+                            {agent.version && (
+                              <span>v{agent.version}</span>
+                            )}
+                          </div>
                         </div>
                       </div>
+
+                      <div className="flex items-center gap-2">
+                        <Link
+                          href="/dashboard/files"
+                          className="px-3 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-xs font-semibold text-slate-300 hover:text-white transition-colors"
+                        >
+                          Files
+                        </Link>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
-        )}
+        </div>
+
+        {/* Right Col: Quick Access & Actions */}
+        <div className="space-y-6">
+
+          {/* Quick Actions Card */}
+          <div className="glass-card rounded-3xl p-6 space-y-4">
+            <h3 className="text-base font-bold text-white tracking-tight">Quick Shortcuts</h3>
+            <div className="space-y-2">
+              <Link
+                href="/dashboard/files"
+                className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.05] transition-all group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 group-hover:scale-110 transition-transform">
+                    <FolderOpen className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-white group-hover:text-indigo-300 transition-colors">File Explorer</div>
+                    <div className="text-[11px] text-slate-500">Upload &amp; manage files</div>
+                  </div>
+                </div>
+                <ArrowUpRight className="w-4 h-4 text-slate-500 group-hover:text-white transition-colors" />
+              </Link>
+
+              <Link
+                href="/dashboard/shared"
+                className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.05] transition-all group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-violet-500/10 text-violet-400 group-hover:scale-110 transition-transform">
+                    <Share2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-white group-hover:text-violet-300 transition-colors">Shared Links</div>
+                    <div className="text-[11px] text-slate-500">Public access management</div>
+                  </div>
+                </div>
+                <ArrowUpRight className="w-4 h-4 text-slate-500 group-hover:text-white transition-colors" />
+              </Link>
+
+              {isAdmin && (
+                <Link
+                  href="/dashboard/admin"
+                  className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.05] transition-all group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 group-hover:scale-110 transition-transform">
+                      <ShieldCheck className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-white group-hover:text-cyan-300 transition-colors">Admin Portal</div>
+                      <div className="text-[11px] text-slate-500">Users, quotas &amp; audit logs</div>
+                    </div>
+                  </div>
+                  <ArrowUpRight className="w-4 h-4 text-slate-500 group-hover:text-white transition-colors" />
+                </Link>
+              )}
+            </div>
+          </div>
+
+          {/* Cloud Security Guarantee Banner */}
+          <div className="p-6 rounded-3xl bg-gradient-to-br from-indigo-900/30 to-violet-900/20 border border-indigo-500/20 space-y-3">
+            <div className="flex items-center gap-2 text-indigo-400 font-bold text-xs">
+              <CheckCircle2 className="w-4 h-4" />
+              Zero Central Disk Persistence
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Your file bytes are never stored on CloudBox central servers. All storage remains strictly on your local Ubuntu node hardware.
+            </p>
+          </div>
+
+        </div>
+
       </div>
 
+      {/* ── Claim Node Modal ── */}
       {claimCode && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h3>Add a New Storage Node</h3>
-            <p>Run this command on the computer you want to add as storage:</p>
-            <div className="modal__code-block">
-              <code>pnpm --filter agent run dev start</code>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4">
+          <div className="bg-[#141b27] border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden p-6 space-y-6">
+            <div className="flex items-center justify-between border-b border-white/[0.07] pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                  <Server className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Add Storage Node</h3>
+                  <p className="text-xs text-slate-400">Link an Ubuntu machine to your CloudBox account</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setClaimCode(null)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <p style={{ marginTop: "1rem" }}>First time? Register with your claim code:</p>
-            <div className="modal__code-block">
-              <code>pnpm --filter agent run dev register {claimCode}</code>
+
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                  1. Run Agent Service
+                </p>
+                <div className="flex items-center gap-2 bg-black/60 border border-white/[0.08] rounded-xl p-3">
+                  <code className="text-xs text-indigo-300 font-mono flex-1 break-all">
+                    pnpm --filter agent run dev start
+                  </code>
+                  <button
+                    onClick={() => copyToClipboard("pnpm --filter agent run dev start", "start")}
+                    className="p-1.5 text-slate-400 hover:text-white transition-colors"
+                  >
+                    {copiedCmd === "start" ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                  2. Register Claim Code
+                </p>
+                <div className="flex items-center gap-2 bg-black/60 border border-white/[0.08] rounded-xl p-3">
+                  <code className="text-xs text-indigo-300 font-mono flex-1 break-all">
+                    pnpm --filter agent run dev register {claimCode}
+                  </code>
+                  <button
+                    onClick={() => copyToClipboard(`pnpm --filter agent run dev register ${claimCode}`, "reg")}
+                    className="p-1.5 text-slate-400 hover:text-white transition-colors"
+                  >
+                    {copiedCmd === "reg" ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center gap-2">
+                <Clock className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                This claim code expires in 10 minutes.
+              </div>
             </div>
-            <p className="modal__note">⚠️ This code expires in 10 minutes.</p>
-            <button onClick={() => setClaimCode(null)} className="dash__btn" style={{ marginTop: "1rem" }}>Close</button>
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setClaimCode(null)}
+                className="btn-primary px-6 py-2.5 rounded-xl text-xs"
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      <style>{`
-        .dash__hero { margin-bottom: 2.5rem; }
-        .dash__hero h2 { font-size: 1.75rem; font-weight: 700; margin: 0 0 .5rem 0; }
-        .dash__hero-sub { color: var(--cb-text-muted); font-size: 1rem; margin: 0; }
-
-        .dash__section { background: var(--cb-surface); border: 1px solid var(--cb-border); border-radius: 14px; padding: 1.5rem; }
-        .dash__section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
-        .dash__section-header h3 { margin: 0; font-size: 1rem; font-weight: 600; }
-
-        .dash__btn { background: var(--cb-surface-2, rgba(255,255,255,.06)); border: 1px solid var(--cb-border); color: var(--cb-text); padding: .5rem 1rem; border-radius: 8px; cursor: pointer; font-size: .875rem; font-weight: 500; transition: all .15s; display:inline-flex; align-items:center; }
-        .dash__btn:hover { background: rgba(255,255,255,.1); }
-        .dash__btn--primary { background: var(--cb-primary, #6366f1); color: white; border: none; }
-        .dash__btn--primary:hover { opacity: .88; }
-        .dash__btn:disabled { opacity: .45; cursor: not-allowed; }
-        .dash__error { color: #fb7185; font-size: .875rem; margin: .75rem 0 0; }
-
-        .dash__empty { padding: 2.5rem 1rem; text-align: center; color: var(--cb-text-muted); }
-        .dash__empty p { margin: 0 0 .5rem; }
-        .dash__empty-sub { font-size: .875rem; }
-
-        .dash__agent-list { display: flex; flex-direction: column; gap: .75rem; }
-        .dash__agent-card { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; background: rgba(255,255,255,.03); border: 1px solid var(--cb-border); border-radius: 10px; transition: border-color .2s; }
-        .dash__agent-card:hover { border-color: rgba(99,102,241,.4); }
-        .dash__agent-info { display: flex; align-items: center; gap: .875rem; }
-        .dash__status-dot { width: 10px; height: 10px; border-radius: 50%; background: #4b5563; flex-shrink: 0; box-shadow: 0 0 0 3px rgba(75,85,99,.2); transition: all .3s; }
-        .dash__status-dot--online { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.25), 0 0 8px rgba(34,197,94,.5); animation: pulse-green 2s infinite; }
-        .dash__agent-id { font-family: monospace; font-size: .875rem; color: var(--cb-text); }
-        .dash__agent-meta { font-size: .8125rem; color: var(--cb-text-muted); margin-top: .2rem; }
-
-        @keyframes pulse-green {
-          0%, 100% { box-shadow: 0 0 0 3px rgba(34,197,94,.25), 0 0 8px rgba(34,197,94,.4); }
-          50% { box-shadow: 0 0 0 5px rgba(34,197,94,.15), 0 0 14px rgba(34,197,94,.6); }
-        }
-
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.65); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: 50; }
-        .modal { background: var(--cb-surface); border: 1px solid var(--cb-border); border-radius: 14px; padding: 2rem; max-width: 520px; width: 90%; box-shadow: 0 24px 48px rgba(0,0,0,.5); }
-        .modal h3 { margin: 0 0 .75rem; font-size: 1.125rem; }
-        .modal p { color: var(--cb-text-muted); font-size: .9375rem; margin: 0 0 1rem; line-height: 1.6; }
-        .modal__code-block { background: #000; border: 1px solid rgba(255,255,255,.08); padding: .875rem 1rem; border-radius: 8px; font-family: monospace; font-size: .9375rem; color: #a5b4fc; word-break: break-all; }
-        .modal__note { font-size: .8125rem !important; color: #fb7185 !important; margin-top: 1rem !important; }
-
-        /* Storage Usage Widget */
-        .usage-card { background: var(--cb-surface); border: 1px solid var(--cb-border); border-radius: 14px; padding: 1.5rem; }
-        .usage-card__header { display: flex; align-items: center; gap: .875rem; margin-bottom: 1.25rem; }
-        .usage-card__icon { width: 42px; height: 42px; border-radius: 10px; background: rgba(99,102,241,.12); border: 1px solid rgba(99,102,241,.2); display: flex; align-items: center; justify-content: center; }
-        .usage-card__title { font-size: 1rem; font-weight: 600; margin: 0; color: white; }
-        .usage-card__sub { font-size: .8125rem; color: var(--cb-text-muted); margin: .125rem 0 0; }
-        .usage-card__bar-wrap { margin-bottom: 1rem; }
-        .usage-card__bar-track { height: 8px; background: rgba(255,255,255,.06); border-radius: 99px; overflow: hidden; margin-bottom: .5rem; }
-        .usage-card__bar-fill { height: 100%; background: linear-gradient(90deg, #6366f1, #8b5cf6); border-radius: 99px; transition: width .6s ease; }
-        .usage-card__bar-fill--warn { background: linear-gradient(90deg, #f59e0b, #f97316); }
-        .usage-card__bar-fill--crit { background: linear-gradient(90deg, #ef4444, #fb7185); }
-        .usage-card__bar-labels { display: flex; justify-content: space-between; font-size: .8125rem; }
-        .usage-card__used { color: var(--cb-text); font-weight: 500; display: flex; align-items: center; gap: .25rem; }
-        .usage-card__used--warn { color: #f59e0b; }
-        .usage-card__used--crit { color: #fb7185; }
-        .usage-card__quota { color: var(--cb-text-muted); }
-        .usage-card__footer { display: flex; align-items: center; gap: .5rem; font-size: .8125rem; color: var(--cb-text-muted); padding-top: 1rem; border-top: 1px solid var(--cb-border); }
-      `}</style>
     </div>
   );
 }

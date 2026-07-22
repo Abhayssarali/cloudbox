@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Edit2, X, UserMinus } from "lucide-react";
+import { Loader2, Edit2, X, UserMinus, ShieldCheck, Users, Check, Save } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -57,7 +57,7 @@ export default function AdminUsers() {
       qc.invalidateQueries({ queryKey: ["admin", "users"] });
       setEditingQuota(null);
     },
-    onError: (e: Error) => alert(`Failed: ${e.message}`),
+    onError: (e: Error) => alert(`Quota update failed: ${e.message}`),
   });
 
   const roleMutation = useMutation({
@@ -75,7 +75,7 @@ export default function AdminUsers() {
       qc.invalidateQueries({ queryKey: ["admin", "users"] });
       setEditingRole(null);
     },
-    onError: (e: Error) => alert(`Failed: ${e.message}`),
+    onError: (e: Error) => alert(`Role update failed: ${e.message}`),
   });
 
   const removeMutation = useMutation({
@@ -88,160 +88,172 @@ export default function AdminUsers() {
       if (!data.success) throw new Error(data.error);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "users"] }),
-    onError: (e: Error) => alert(`Failed: ${e.message}`),
+    onError: (e: Error) => alert(`Remove failed: ${e.message}`),
   });
 
-  if (error) {
-    return (
-      <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg">
-        Failed to load users: {(error as Error).message}
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-5">
-      <div>
-        <h2 className="text-xl font-bold text-white mb-1">Workspace Members</h2>
-        <p className="text-sm text-gray-500">
-          Members join using your workspace invite code. You can adjust their role, quota, or remove them here.
-        </p>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between pb-6 border-b border-white/[0.07]">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+            <Users className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-white tracking-tight">Workspace Members</h2>
+            <p className="text-xs text-slate-400">Manage account access, permissions, and storage allocations</p>
+          </div>
+        </div>
+
+        <div className="px-3.5 py-1.5 rounded-full bg-white/[0.03] border border-white/[0.06] text-xs text-slate-300 font-medium">
+          {users.length} Registered User(s)
+        </div>
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center gap-2 text-gray-500 py-10">
-          <Loader2 className="w-5 h-5 animate-spin" />Loading members…
+      {error ? (
+        <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs rounded-xl">
+          Failed to load workspace members: {(error as Error).message}
+        </div>
+      ) : isLoading ? (
+        <div className="flex items-center justify-center py-20 text-slate-500 gap-3">
+          <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
+          <span className="text-xs font-medium">Loading workspace users...</span>
         </div>
       ) : users.length === 0 ? (
-        <div className="text-center py-16 text-gray-500">
-          <p className="text-lg mb-1">No members yet</p>
-          <p className="text-sm">Share your workspace invite code from the Overview tab to invite members.</p>
+        <div className="glass-card rounded-3xl p-12 text-center space-y-3">
+          <Users className="w-10 h-10 mx-auto text-slate-600" />
+          <p className="text-sm font-semibold text-white">No members registered</p>
+          <p className="text-xs text-slate-400">Share your workspace invite token from the Overview page to onboard users.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-[#1f2229]">
-          <table className="w-full text-sm">
+        <div className="glass-card rounded-3xl border border-white/[0.07] overflow-hidden">
+          <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-[#1f2229] bg-[#12141a]">
-                <th className="text-left px-4 py-3 text-gray-400 font-medium">Member</th>
-                <th className="text-left px-4 py-3 text-gray-400 font-medium">Role</th>
-                <th className="text-left px-4 py-3 text-gray-400 font-medium">Storage Used</th>
-                <th className="text-left px-4 py-3 text-gray-400 font-medium">Quota</th>
-                <th className="text-left px-4 py-3 text-gray-400 font-medium">Joined</th>
-                <th className="text-left px-4 py-3 text-gray-400 font-medium"></th>
+              <tr className="border-b border-white/[0.07] bg-white/[0.02] text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                <th className="p-4">Member Email</th>
+                <th className="p-4">Role</th>
+                <th className="p-4">Storage Used</th>
+                <th className="p-4">Quota Limit</th>
+                <th className="p-4">Joined Date</th>
+                <th className="p-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.id} className="border-b border-[#1a1c22] hover:bg-white/[0.02] transition-colors">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-gray-800 flex items-center justify-center text-gray-400 text-xs border border-gray-700">
+            <tbody className="divide-y divide-white/[0.04]">
+              {users.map((u) => {
+                const used = Number(u.usedBytes || 0);
+                const quota = Number(u.quotaBytes || 0);
+                const pct = quota > 0 ? Math.min(100, Math.round((used / quota) * 100)) : 0;
+
+                return (
+                  <tr key={u.id} className="hover:bg-white/[0.03] transition-colors text-xs text-slate-300">
+                    <td className="p-4 font-semibold text-white flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-bold flex items-center justify-center text-xs">
                         {u.email.charAt(0).toUpperCase()}
                       </div>
-                      <span className="text-gray-200 truncate max-w-[180px]">{u.email}</span>
-                    </div>
-                  </td>
+                      <span className="truncate max-w-xs">{u.email}</span>
+                    </td>
 
-                  {/* Role */}
-                  <td className="px-4 py-3">
-                    {editingRole?.userId === u.id ? (
-                      <div className="flex items-center gap-1">
-                        <select
-                          className="bg-[#1f2229] border border-[#2d3139] text-gray-200 text-xs rounded px-2 py-1"
-                          defaultValue={u.role}
-                          onChange={(e) => roleMutation.mutate({ userId: u.id, role: e.target.value })}
-                        >
-                          <option value="USER">USER</option>
-                          <option value="ADMIN">ADMIN</option>
-                          <option value="SUPER_ADMIN">SUPER_ADMIN</option>
-                        </select>
-                        <button onClick={() => setEditingRole(null)}>
-                          <X className="w-4 h-4 text-gray-500 hover:text-rose-400" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1.5">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          u.role === "SUPER_ADMIN" ? "bg-fuchsia-500/10 text-fuchsia-400"
-                          : u.role === "ADMIN" ? "bg-violet-500/10 text-violet-400"
-                          : "bg-gray-500/10 text-gray-400"
-                        }`}>{u.role}</span>
-                        <button onClick={() => setEditingRole({ userId: u.id })}>
-                          <Edit2 className="w-3 h-3 text-gray-600 hover:text-gray-300" />
-                        </button>
-                      </div>
-                    )}
-                  </td>
+                    {/* Role selector */}
+                    <td className="p-4">
+                      {editingRole?.userId === u.id ? (
+                        <div className="flex items-center gap-2">
+                          <select
+                            defaultValue={u.role}
+                            onChange={(e) => roleMutation.mutate({ userId: u.id, role: e.target.value })}
+                            className="bg-[#0b0e14] border border-white/10 text-xs text-white rounded-lg px-2 py-1 focus:outline-none"
+                          >
+                            <option value="USER">USER</option>
+                            <option value="ADMIN">ADMIN</option>
+                            <option value="SUPER_ADMIN">SUPER_ADMIN</option>
+                          </select>
+                          <button onClick={() => setEditingRole(null)} className="text-slate-500 hover:text-slate-300">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                            u.role === "SUPER_ADMIN" ? "bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30" :
+                            u.role === "ADMIN" ? "bg-violet-500/20 text-violet-300 border border-violet-500/30" :
+                            "bg-slate-700/40 text-slate-300"
+                          }`}>
+                            {u.role}
+                          </span>
+                          <button onClick={() => setEditingRole({ userId: u.id })} className="text-slate-500 hover:text-slate-300">
+                            <Edit2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                    </td>
 
-                  {/* Storage Used */}
-                  <td className="px-4 py-3">
-                    <div className="text-gray-300 text-xs">{formatBytes(u.usedBytes)}</div>
-                    {parseInt(u.quotaBytes, 10) > 0 && (
-                      <div className="w-28 bg-gray-800 rounded-full h-1 mt-1.5">
-                        <div
-                          className="bg-indigo-500 h-1 rounded-full transition-all"
-                          style={{
-                            width: `${Math.min(100, (parseInt(u.usedBytes, 10) / parseInt(u.quotaBytes, 10)) * 100).toFixed(1)}%`,
-                          }}
-                        />
-                      </div>
-                    )}
-                  </td>
+                    {/* Storage usage */}
+                    <td className="p-4 space-y-1">
+                      <div className="font-mono text-slate-300">{formatBytes(u.usedBytes)}</div>
+                      {quota > 0 && (
+                        <div className="w-24 h-1 bg-slate-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-indigo-400 rounded-full" style={{ width: `${pct}%` }} />
+                        </div>
+                      )}
+                    </td>
 
-                  {/* Quota */}
-                  <td className="px-4 py-3">
-                    {editingQuota?.userId === u.id ? (
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="number"
-                          min={0}
-                          step={1}
-                          className="w-20 bg-[#1f2229] border border-[#2d3139] text-gray-200 text-xs rounded px-2 py-1"
-                          value={editingQuota.value}
-                          onChange={(e) => setEditingQuota({ userId: u.id, value: e.target.value })}
-                          placeholder="GB"
-                        />
-                        <span className="text-xs text-gray-500">GB</span>
-                        <button onClick={() => quotaMutation.mutate({ userId: u.id, quotaGB: parseFloat(editingQuota.value) || 0 })}>
-                          <span className="text-indigo-400 text-xs font-semibold hover:text-indigo-300">Save</span>
-                        </button>
-                        <button onClick={() => setEditingQuota(null)}>
-                          <X className="w-3.5 h-3.5 text-gray-500 hover:text-rose-400" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-gray-400 text-xs">
-                          {parseInt(u.quotaBytes, 10) === 0 ? "Unlimited" : formatBytes(u.quotaBytes)}
-                        </span>
-                        <button onClick={() => setEditingQuota({ userId: u.id, value: (parseInt(u.quotaBytes, 10) / (1024 ** 3)).toFixed(0) })}>
-                          <Edit2 className="w-3 h-3 text-gray-600 hover:text-gray-300" />
-                        </button>
-                      </div>
-                    )}
-                  </td>
+                    {/* Quota limit */}
+                    <td className="p-4 font-mono">
+                      {editingQuota?.userId === u.id ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min={0}
+                            value={editingQuota.value}
+                            onChange={(e) => setEditingQuota({ userId: u.id, value: e.target.value })}
+                            className="w-16 bg-[#0b0e14] border border-white/10 text-xs text-white rounded-lg px-2 py-1 focus:outline-none"
+                            placeholder="GB"
+                          />
+                          <span className="text-slate-500">GB</span>
+                          <button
+                            onClick={() => quotaMutation.mutate({ userId: u.id, quotaGB: parseFloat(editingQuota.value) || 0 })}
+                            className="text-indigo-400 font-bold hover:text-indigo-300"
+                          >
+                            Save
+                          </button>
+                          <button onClick={() => setEditingQuota(null)} className="text-slate-500 hover:text-slate-300">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-slate-400">
+                            {quota === 0 ? "Unlimited" : formatBytes(u.quotaBytes)}
+                          </span>
+                          <button
+                            onClick={() => setEditingQuota({ userId: u.id, value: (quota / (1024 ** 3)).toFixed(0) })}
+                            className="text-slate-500 hover:text-slate-300"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                    </td>
 
-                  <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                    {new Date(u.createdAt).toLocaleDateString()}
-                  </td>
+                    <td className="p-4 font-mono text-slate-500">
+                      {new Date(u.createdAt).toLocaleDateString()}
+                    </td>
 
-                  {/* Remove from workspace */}
-                  <td className="px-4 py-3">
-                    <button
-                      title="Remove from workspace"
-                      className="flex items-center gap-1 text-xs text-gray-600 hover:text-rose-400 transition-colors"
-                      onClick={() => {
-                        if (confirm(`Remove ${u.email} from workspace?`)) {
-                          removeMutation.mutate(u.id);
-                        }
-                      }}
-                    >
-                      <UserMinus className="w-3.5 h-3.5" />
-                      Remove
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    {/* Remove Action */}
+                    <td className="p-4 text-right">
+                      <button
+                        onClick={() => {
+                          if (confirm(`Remove ${u.email} from workspace?`)) {
+                            removeMutation.mutate(u.id);
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 text-xs font-semibold flex items-center gap-1.5 ml-auto transition-colors"
+                      >
+                        <UserMinus className="w-3.5 h-3.5" />
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
