@@ -24,9 +24,10 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   group        Group?   @relation(fields: [groupId], references: [id])
-  agents           Agent[]   @relation("OwnedAgents")
-  allocatedAgents  Agent[]   @relation("AllocatedUserAgents")
-  activityLogs ActivityLog[]
+  agents           Agent[]       @relation("OwnedAgents")
+  allocatedAgents  Agent[]       @relation("AllocatedUserAgents")
+  ownedGroups      Group[]       @relation("GroupOwner")
+  activityLogs     ActivityLog[]
 
   @@map("users")
 }
@@ -108,9 +109,12 @@ model Group {
   id              String   @id @default(uuid())
   name            String   @unique
   description     String?
+  inviteCode      String   @unique @default(cuid())
+  ownerId         String
   createdAt       DateTime @default(now())
   users           User[]
   allocatedAgents Agent[]  @relation("AllocatedGroupAgents")
+  owner           User     @relation("GroupOwner", fields: [ownerId], references: [id])
 
   @@map("groups")
 }

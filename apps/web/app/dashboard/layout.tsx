@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect } from "react";
 import { LayoutDashboard, FolderOpen, Settings, LogOut, ShieldCheck, Share2, Trash2 } from "lucide-react";
 import { useAuthStore } from "@/stores/useAuthStore";
 import type { AuthState } from "@/stores/useAuthStore";
@@ -12,6 +13,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const user = useAuthStore((s: AuthState) => s.user);
   const clearUser = useAuthStore((s: AuthState) => s.clearUser);
+  const setUser = useAuthStore((s: AuthState) => s.setUser);
+
+  // Sync session on every page load — ensures role/workspace changes are reflected immediately
+  useEffect(() => {
+    fetch(`${API_URL}/auth/me`, { credentials: "include" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success && d.data?.user) {
+          setUser({
+            id: d.data.user.id,
+            email: d.data.user.email,
+            role: d.data.user.role,
+          });
+        } else {
+          // Token expired or invalid — redirect to login
+          clearUser();
+          window.location.href = "/login";
+        }
+      })
+      .catch(() => {/* network error, keep showing cached user */});
+  }, [setUser, clearUser]);
 
   async function handleLogout() {
     await fetch(`${API_URL}/auth/logout`, { method: "POST", credentials: "include" });
@@ -27,7 +49,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: "Shared", href: "/dashboard/shared", icon: Share2 },
     { name: "Trash", href: "/dashboard/trash", icon: Trash2 },
     { name: "Settings", href: "/dashboard/settings", icon: Settings },
-    ...(isAdmin ? [{ name: "Admin", href: "/dashboard/admin", icon: ShieldCheck }] : []),
+    ...(isAdmin ? [{ name: "Admin Panel", href: "/dashboard/admin", icon: ShieldCheck }] : []),
   ];
 
   return (
@@ -44,6 +66,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <span className="font-bold text-lg tracking-tight text-white">CloudBox</span>
         </div>
 
+        {/* Role badge */}
+        {user && (
+          <div className="px-4 py-2 border-b border-[#1f2229]">
+            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+              user.role === "SUPER_ADMIN" ? "bg-fuchsia-500/15 text-fuchsia-400" :
+              user.role === "ADMIN" ? "bg-violet-500/15 text-violet-400" :
+              "bg-gray-500/10 text-gray-500"
+            }`}>
+              {user.role === "SUPER_ADMIN" ? "Super Admin" : user.role === "ADMIN" ? "Admin" : "Member"}
+            </span>
+          </div>
+        )}
+
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname?.startsWith(item.href));
@@ -55,7 +90,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 href={item.href}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   isActive 
-                    ? "bg-indigo-500/10 text-indigo-400" 
+                    ? item.name === "Admin Panel" 
+                      ? "bg-violet-500/10 text-violet-400"
+                      : "bg-indigo-500/10 text-indigo-400"
                     : "text-gray-400 hover:text-gray-200 hover:bg-white/5"
                 }`}
               >

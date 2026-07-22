@@ -5,10 +5,14 @@ import { useAuthStore } from "@/stores/useAuthStore";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
+type Mode = "choose" | "join" | "create";
+
 interface FormErrors {
   email?: string;
   password?: string;
   confirm?: string;
+  workspace?: string;
+  inviteCode?: string;
   general?: string;
 }
 
@@ -16,11 +20,16 @@ export default function SignupForm() {
   const emailId = useId();
   const passwordId = useId();
   const confirmId = useId();
+  const workspaceId = useId();
+  const inviteId = useId();
   const setUser = useAuthStore((s: import("@/stores/useAuthStore").AuthState) => s.setUser);
 
+  const [mode, setMode] = useState<Mode>("choose");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const [errors, setErrors] = useState<FormErrors>({});
   const [isLoading, setIsLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
@@ -33,6 +42,8 @@ export default function SignupForm() {
     else if (password.length < 8) errs.password = "At least 8 characters";
     if (!confirm) errs.confirm = "Please confirm your password";
     else if (confirm !== password) errs.confirm = "Passwords do not match";
+    if (mode === "create" && !workspaceName.trim()) errs.workspace = "Workspace name is required";
+    if (mode === "join" && !inviteCode.trim()) errs.inviteCode = "Invite code is required";
     return errs;
   }
 
@@ -42,18 +53,33 @@ export default function SignupForm() {
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setErrors({});
     setIsLoading(true);
+
     try {
+      const body: Record<string, string> = { email, password };
+      if (mode === "create") body["workspaceName"] = workspaceName;
+      if (mode === "join") body["inviteCode"] = inviteCode;
+
       const res = await fetch(`${API_URL}/auth/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(body),
       });
-      const data = await res.json() as { success: boolean; error?: string; data?: { user: { id: string; email: string; role: "SUPER_ADMIN" | "ADMIN" | "USER" } } };
+
+      const data = await res.json() as {
+        success: boolean;
+        error?: string;
+        data?: {
+          user: { id: string; email: string; role: "SUPER_ADMIN" | "ADMIN" | "USER" };
+          workspace?: { id: string; name: string; inviteCode?: string };
+        };
+      };
+
       if (!res.ok || !data.success) {
         setErrors({ general: data.error ?? "Signup failed. Please try again." });
         return;
       }
+
       if (data.data?.user) setUser(data.data.user);
       window.location.href = "/dashboard";
     } catch {
@@ -63,12 +89,88 @@ export default function SignupForm() {
     }
   }
 
+  // ── Mode selection card ──────────────────────────────────────────────────
+  if (mode === "choose") {
+    return (
+      <div className="sf-choose">
+        <p className="sf-choose__heading">How would you like to get started?</p>
+        <div className="sf-choose__cards">
+          <button id="choose-create" className="sf-choose__card" onClick={() => setMode("create")}>
+            <div className="sf-choose__icon">🏢</div>
+            <div className="sf-choose__card-title">Create a workspace</div>
+            <div className="sf-choose__card-sub">
+              Set up your own storage workspace and invite your team.
+            </div>
+            <div className="sf-choose__badge sf-choose__badge--admin">Admin account</div>
+          </button>
+
+          <button id="choose-join" className="sf-choose__card" onClick={() => setMode("join")}>
+            <div className="sf-choose__icon">🔗</div>
+            <div className="sf-choose__card-title">Join a workspace</div>
+            <div className="sf-choose__card-sub">
+              Enter an invite code from your admin to join their workspace.
+            </div>
+            <div className="sf-choose__badge sf-choose__badge--user">Member account</div>
+          </button>
+        </div>
+
+        <style>{`
+          .sf-choose { display: flex; flex-direction: column; gap: 1.25rem; }
+          .sf-choose__heading { text-align: center; color: var(--cb-text-muted); font-size: .9375rem; margin: 0; }
+          .sf-choose__cards { display: grid; grid-template-columns: 1fr 1fr; gap: .875rem; }
+          @media (max-width: 480px) { .sf-choose__cards { grid-template-columns: 1fr; } }
+          .sf-choose__card { background: var(--cb-surface-2, rgba(255,255,255,.04)); border: 1px solid var(--cb-border); border-radius: 14px; padding: 1.5rem 1.125rem; text-align: center; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: .5rem; transition: border-color .2s, background .2s, transform .15s; }
+          .sf-choose__card:hover { border-color: rgba(99,102,241,.5); background: rgba(99,102,241,.06); transform: translateY(-2px); }
+          .sf-choose__icon { font-size: 2rem; line-height: 1; }
+          .sf-choose__card-title { font-size: 1rem; font-weight: 600; color: var(--cb-text); margin: .25rem 0 0; }
+          .sf-choose__card-sub { font-size: .8125rem; color: var(--cb-text-muted); line-height: 1.5; }
+          .sf-choose__badge { font-size: .6875rem; font-weight: 700; letter-spacing: .04em; padding: .25rem .625rem; border-radius: 99px; margin-top: .25rem; }
+          .sf-choose__badge--admin { background: rgba(139,92,246,.15); color: #a78bfa; border: 1px solid rgba(139,92,246,.3); }
+          .sf-choose__badge--user { background: rgba(34,197,94,.1); color: #4ade80; border: 1px solid rgba(34,197,94,.25); }
+        `}</style>
+      </div>
+    );
+  }
+
+  // ── Shared form ──────────────────────────────────────────────────────────
   return (
     <form onSubmit={handleSubmit} noValidate id="signup-form" className="sf">
+      {/* Back button */}
+      <button type="button" className="sf__back" onClick={() => { setMode("choose"); setErrors({}); }}>
+        ← {mode === "create" ? "Create a workspace" : "Join a workspace"}
+      </button>
+
       {errors.general && (
         <div className="sf__error-banner" role="alert">
           <svg viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" /></svg>
           {errors.general}
+        </div>
+      )}
+
+      {/* Workspace name field (create mode) */}
+      {mode === "create" && (
+        <div className="sf__group">
+          <label htmlFor={workspaceId} className="sf__label">Workspace name</label>
+          <input id={workspaceId} type="text" autoComplete="organization"
+            value={workspaceName}
+            onChange={(e) => { setWorkspaceName(e.target.value); if (errors.workspace) setErrors((er) => ({ ...er, workspace: undefined })); }}
+            className={`sf__input ${errors.workspace ? "sf__input--error" : ""}`}
+            placeholder="e.g. Acme Corp" disabled={isLoading} />
+          {errors.workspace && <p className="sf__field-error" role="alert">{errors.workspace}</p>}
+          <p className="sf__hint">Your team members will use your invite code to join this workspace.</p>
+        </div>
+      )}
+
+      {/* Invite code field (join mode) */}
+      {mode === "join" && (
+        <div className="sf__group">
+          <label htmlFor={inviteId} className="sf__label">Invite code</label>
+          <input id={inviteId} type="text" autoComplete="off"
+            value={inviteCode}
+            onChange={(e) => { setInviteCode(e.target.value.trim()); if (errors.inviteCode) setErrors((er) => ({ ...er, inviteCode: undefined })); }}
+            className={`sf__input sf__input--mono ${errors.inviteCode ? "sf__input--error" : ""}`}
+            placeholder="Paste code from your admin" disabled={isLoading} />
+          {errors.inviteCode && <p className="sf__field-error" role="alert">{errors.inviteCode}</p>}
         </div>
       )}
 
@@ -83,7 +185,7 @@ export default function SignupForm() {
         Continue with Google
       </a>
 
-      <div className="sf__divider"><span>or create account with email</span></div>
+      <div className="sf__divider"><span>or continue with email</span></div>
 
       {/* Email */}
       <div className="sf__group">
@@ -109,7 +211,6 @@ export default function SignupForm() {
           </button>
         </div>
         {errors.password && <p className="sf__field-error" role="alert">{errors.password}</p>}
-        {/* Strength hint */}
         {password.length > 0 && (
           <div className="sf__strength">
             {[...Array(4)].map((_, i) => (
@@ -132,11 +233,15 @@ export default function SignupForm() {
       </div>
 
       <button type="submit" className="sf__submit" disabled={isLoading} id="signup-submit-button">
-        {isLoading ? <><span className="sf__spinner" aria-hidden="true" />Creating account…</> : "Create account"}
+        {isLoading
+          ? <><span className="sf__spinner" aria-hidden="true" />{mode === "create" ? "Creating workspace…" : "Joining workspace…"}</>
+          : mode === "create" ? "Create workspace" : "Join workspace"}
       </button>
 
       <style>{`
         .sf { display: flex; flex-direction: column; gap: 1.25rem; }
+        .sf__back { background: none; border: none; color: var(--cb-text-muted); font-size: .9375rem; font-weight: 600; cursor: pointer; text-align: left; padding: 0; display: flex; align-items: center; gap: .375rem; transition: color .15s; }
+        .sf__back:hover { color: var(--cb-text); }
         .sf__error-banner { display: flex; align-items: center; gap: .5rem; padding: .75rem 1rem; background: rgba(244,63,94,.12); border: 1px solid rgba(244,63,94,.3); border-radius: 10px; color: #fb7185; font-size: .875rem; }
         .sf__error-banner svg { width: 1rem; height: 1rem; flex-shrink: 0; }
         .sf__google-btn { display: flex; align-items: center; justify-content: center; gap: .625rem; padding: .75rem 1rem; background: rgba(255,255,255,.05); border: 1px solid var(--cb-border); border-radius: 10px; color: var(--cb-text); font-size: .9375rem; font-weight: 500; text-decoration: none; transition: background .15s, border-color .15s, transform .1s; }
@@ -146,7 +251,8 @@ export default function SignupForm() {
         .sf__divider::before, .sf__divider::after { content: ''; flex: 1; height: 1px; background: var(--cb-border); }
         .sf__group { display: flex; flex-direction: column; gap: .375rem; }
         .sf__label { font-size: .875rem; font-weight: 500; color: var(--cb-text-muted); }
-        .sf__input { width: 100%; padding: .75rem 1rem; background: var(--cb-surface-2); border: 1px solid var(--cb-border); border-radius: 10px; color: var(--cb-text); font-size: .9375rem; font-family: inherit; outline: none; transition: border-color .15s, box-shadow .15s; }
+        .sf__input { width: 100%; padding: .75rem 1rem; background: var(--cb-surface-2); border: 1px solid var(--cb-border); border-radius: 10px; color: var(--cb-text); font-size: .9375rem; font-family: inherit; outline: none; transition: border-color .15s, box-shadow .15s; box-sizing: border-box; }
+        .sf__input--mono { font-family: monospace; letter-spacing: .05em; }
         .sf__input::placeholder { color: var(--cb-text-subtle); }
         .sf__input:focus { border-color: var(--cb-primary); box-shadow: 0 0 0 3px var(--cb-primary-glow); }
         .sf__input--error { border-color: #f43f5e; box-shadow: 0 0 0 3px rgba(244,63,94,.15); }
@@ -156,6 +262,7 @@ export default function SignupForm() {
         .sf__eye { position: absolute; right: .75rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--cb-text-subtle); padding: .25rem; display: flex; align-items: center; border-radius: 4px; }
         .sf__eye svg { width: 1.125rem; height: 1.125rem; }
         .sf__field-error { font-size: .8125rem; color: #fb7185; }
+        .sf__hint { font-size: .8125rem; color: var(--cb-text-subtle); margin: .125rem 0 0; }
         .sf__strength { display: flex; align-items: center; gap: .375rem; margin-top: .25rem; }
         .sf__strength-bar { flex: 1; height: 3px; border-radius: 99px; background: var(--cb-border); transition: background .2s; }
         .sf__strength-bar--fill { background: var(--cb-primary); }

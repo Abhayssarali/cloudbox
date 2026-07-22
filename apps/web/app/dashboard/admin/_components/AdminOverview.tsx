@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Users, Server, HardDrive, FileText, Loader2, Wifi, WifiOff } from "lucide-react";
+import WorkspacePanel from "./WorkspacePanel";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -96,6 +97,9 @@ export default function AdminOverview() {
         <h2 className="text-xl font-bold text-white mb-1">Platform Overview</h2>
         <p className="text-sm text-gray-500">Real-time snapshot of your CloudBox platform.</p>
       </div>
+
+      {/* Workspace Invite Code — visible to all admins */}
+      <WorkspacePanel />
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">

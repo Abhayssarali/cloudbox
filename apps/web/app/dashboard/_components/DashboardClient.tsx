@@ -39,7 +39,7 @@ function StorageUsageWidget() {
   const [usage, setUsage] = useState<UserWithUsage | null>(null);
 
   useEffect(() => {
-    fetch(`${API_URL}/me`, { credentials: "include" })
+    fetch(`${API_URL}/auth/me`, { credentials: "include" })
       .then((r) => r.json())
       .then((d) => {
         if (d.success) {

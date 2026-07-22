@@ -22,6 +22,9 @@ const signupSchema = z.object({
     .string()
     .min(8, "Password must be at least 8 characters")
     .max(128, "Password too long"),
+  // Exactly one of these must be provided
+  inviteCode: z.string().optional(),    // join an existing workspace
+  workspaceName: z.string().min(2, "Workspace name must be at least 2 characters").max(64).optional(),
 });
 
 const loginSchema = z.object({
@@ -30,6 +33,9 @@ const loginSchema = z.object({
 });
 
 // ---- POST /auth/signup ----
+// Two flows:
+//   1) workspaceName provided → create a new workspace, caller becomes ADMIN
+//   2) inviteCode provided    → join an existing workspace as USER
 
 authRouter.post("/signup", async (req, res) => {
   const parsed = signupSchema.safeParse(req.body);
@@ -41,7 +47,17 @@ authRouter.post("/signup", async (req, res) => {
     return;
   }
 
-  const { email, password } = parsed.data;
+  const { email, password, inviteCode, workspaceName } = parsed.data;
+
+  // Exactly one of inviteCode / workspaceName must be provided
+  if (!inviteCode && !workspaceName) {
+    res.status(400).json({ success: false, error: "Provide either an invite code to join a workspace, or a workspace name to create one." });
+    return;
+  }
+  if (inviteCode && workspaceName) {
+    res.status(400).json({ success: false, error: "Provide either an invite code OR a workspace name, not both." });
+    return;
+  }
 
   // Check if email already in use
   const existing = await prisma.user.findUnique({ where: { email } });
@@ -52,18 +68,77 @@ authRouter.post("/signup", async (req, res) => {
 
   const passwordHash = await argon2.hash(password);
 
-  const user = await prisma.user.create({
-    data: { email, passwordHash, role: "USER" },
-    select: { id: true, email: true, role: true, createdAt: true },
-  });
+  // ── Flow A: Create a new workspace, caller becomes ADMIN ─────────────────
+  if (workspaceName) {
+    // Check workspace name not taken
+    const nameConflict = await prisma.group.findUnique({ where: { name: workspaceName } });
+    if (nameConflict) {
+      res.status(409).json({ success: false, error: "A workspace with that name already exists." });
+      return;
+    }
 
-  setAuthCookies(res, user.id, user.role);
-  await logActivity("SIGNUP", { userId: user.id, meta: { email: user.email } });
+    const user = await prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        role: "ADMIN",
+        ownedGroups: {
+          create: {
+            name: workspaceName,
+            // ownerId is auto-linked via nested create
+          },
+        },
+      },
+      include: {
+        ownedGroups: { select: { id: true, name: true, inviteCode: true } },
+      },
+    });
 
-  res.status(201).json({
-    success: true,
-    data: { user },
-  });
+    // Put the admin themselves in the group they just created
+    const group = user.ownedGroups[0]!;
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { groupId: group.id },
+    });
+
+    setAuthCookies(res, user.id, user.role);
+    await logActivity("SIGNUP", { userId: user.id, meta: { email: user.email, type: "create_workspace", workspace: workspaceName } });
+
+    res.status(201).json({
+      success: true,
+      data: {
+        user: { id: user.id, email: user.email, role: user.role },
+        workspace: { id: group.id, name: group.name, inviteCode: group.inviteCode },
+      },
+    });
+    return;
+  }
+
+  // ── Flow B: Join an existing workspace via invite code ───────────────────
+  if (inviteCode) {
+    const group = await prisma.group.findUnique({ where: { inviteCode } });
+    if (!group) {
+      res.status(404).json({ success: false, error: "Invalid invite code. Please check with your workspace admin." });
+      return;
+    }
+
+    const user = await prisma.user.create({
+      data: { email, passwordHash, role: "USER", groupId: group.id },
+      select: { id: true, email: true, role: true },
+    });
+
+    setAuthCookies(res, user.id, user.role);
+    await logActivity("SIGNUP", { userId: user.id, meta: { email: user.email, type: "join_workspace", workspace: group.name } });
+
+    res.status(201).json({
+      success: true,
+      data: {
+        user: { id: user.id, email: user.email, role: user.role },
+        workspace: { id: group.id, name: group.name },
+      },
+    });
+    return;
+  }
 });
 
 // ---- POST /auth/login ----
@@ -211,6 +286,9 @@ authRouter.get("/me", requireAuth, async (req, res) => {
       quotaBytes: true,
       usedBytes: true,
       createdAt: true,
+      group: {
+        select: { id: true, name: true, inviteCode: true, ownerId: true },
+      },
     },
   });
 
@@ -219,7 +297,32 @@ authRouter.get("/me", requireAuth, async (req, res) => {
     return;
   }
 
-  res.json({ success: true, data: { user } });
+  // Only expose inviteCode to the workspace owner / admins
+  const isOwner = user.group?.ownerId === user.id;
+  const workspace = user.group
+    ? {
+        id: user.group.id,
+        name: user.group.name,
+        inviteCode: (user.role === "ADMIN" || user.role === "SUPER_ADMIN") && isOwner
+          ? user.group.inviteCode
+          : undefined,
+      }
+    : null;
+
+  res.json({
+    success: true,
+    data: {
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        quotaBytes: user.quotaBytes.toString(),
+        usedBytes: user.usedBytes.toString(),
+        createdAt: user.createdAt.toISOString(),
+      },
+      workspace,
+    },
+  });
 });
 
 // ---- GET /auth/google ----
