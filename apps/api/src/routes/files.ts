@@ -39,15 +39,22 @@ async function getAccessibleAgentIds(userId: string): Promise<string[]> {
 }
 
 // ---- Helper: resolve online agents accessible to a user ----
+// An agent is considered "online" only if:
+//  a) DB status === "ONLINE", AND
+//  b) lastHeartbeat is within the last 2 minutes (guards against stale DB status
+//     after a gateway restart before cleanup runs)
 async function getAccessibleOnlineAgents(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { groupId: true },
   });
 
+  const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+
   return prisma.agent.findMany({
     where: {
       status: "ONLINE",
+      lastHeartbeat: { gte: twoMinutesAgo }, // must have recent heartbeat
       OR: [
         { userId },
         { allocatedUserId: userId },
@@ -242,8 +249,13 @@ filesRouter.get("/download/:id", requireAuth, async (req: Request, res: Response
       return;
     }
 
-    if (file.agent.status === "OFFLINE") {
-      res.status(503).json({ success: false, error: "Agent is offline — cannot download" });
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+    const agentIsStale = file.agent.status === "OFFLINE" ||
+      !file.agent.lastHeartbeat ||
+      file.agent.lastHeartbeat < twoMinutesAgo;
+
+    if (agentIsStale) {
+      res.status(503).json({ success: false, error: "Storage node is offline or unreachable. Please ensure your CloudBox agent is running." });
       return;
     }
 

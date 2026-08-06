@@ -14,7 +14,18 @@ agentsRouter.get("/", requireAuth, async (req, res) => {
     where: { userId: req.authPayload!.userId },
     orderBy: { createdAt: "desc" },
   });
-  res.json({ success: true, data: { agents } });
+
+  // Compute live status: if lastHeartbeat is older than 2 minutes,
+  // treat the agent as OFFLINE regardless of the DB value
+  const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+  const corrected = agents.map((a) => ({
+    ...a,
+    status: (a.status === "ONLINE" && a.lastHeartbeat && a.lastHeartbeat >= twoMinutesAgo)
+      ? "ONLINE"
+      : "OFFLINE",
+  }));
+
+  res.json({ success: true, data: { agents: corrected } });
 });
 
 // ---- GET /agents/mine ----
@@ -54,8 +65,12 @@ agentsRouter.get("/mine", requireAuth, async (req, res) => {
       createdAt: true,
     },
   });
+  const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
   const formatted = agents.map((a) => ({
     ...a,
+    status: (a.status === "ONLINE" && a.lastHeartbeat && a.lastHeartbeat >= twoMinutesAgo)
+      ? "ONLINE"
+      : "OFFLINE",
     lastHeartbeat: a.lastHeartbeat?.toISOString() ?? null,
     createdAt: a.createdAt.toISOString(),
   }));

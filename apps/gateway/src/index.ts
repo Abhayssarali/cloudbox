@@ -16,6 +16,18 @@ async function main() {
   // Connect to Redis first
   await connectRedis();
 
+  // ── Startup cleanup ──
+  // On (re)start, the in-memory socket registry is empty, so any agent that
+  // was previously recorded as ONLINE in the DB is actually disconnected.
+  // Mark them all OFFLINE so stale status cannot block file operations.
+  const resetCount = await prisma.agent.updateMany({
+    where: { status: "ONLINE" },
+    data: { status: "OFFLINE" },
+  });
+  if (resetCount.count > 0) {
+    console.log(`[Gateway] Startup: reset ${resetCount.count} stale ONLINE agent(s) to OFFLINE`);
+  }
+
   // Start Redis relay subscriber (listens for API commands)
   await startRelaySubscriber();
 
@@ -63,6 +75,11 @@ async function main() {
         switch (msg.type) {
           case "HEARTBEAT_ACK":
             updateLastPong(cloudId);
+            // Also refresh lastHeartbeat in DB so the dashboard shows a fresh timestamp
+            prisma.agent.update({
+              where: { cloudId },
+              data: { lastHeartbeat: new Date() },
+            }).catch(() => { /* ignore if agent was deleted */ });
             break;
 
           // Response messages from agent — relay back to API via Redis
