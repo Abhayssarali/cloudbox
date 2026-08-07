@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { Command } from "commander";
 import { generateKeyPairSync, randomUUID, createSign } from "crypto";
 import fs from "fs";
