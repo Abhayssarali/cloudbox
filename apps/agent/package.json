@@ -1,40 +1,39 @@
 {
   "name": "cloudbox-agent",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/index.cjs",
   "bin": {
-    "cloudbox-agent": "dist/index.js"
+    "cloudbox-agent": "dist/index.cjs"
   },
   "files": [
     "dist"
   ],
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=esm --banner:js=\"#!/usr/bin/env node\" --outfile=dist/index.js",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.cjs",
     "prepublishOnly": "pnpm build",
-    "start": "node dist/index.js",
+    "start": "node dist/index.cjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src"
   },
-  "dependencies": {
+  "dependencies": {},
+  "devDependencies": {
     "@cloudbox/shared-types": "workspace:*",
+    "@eslint/js": "^9.9.0",
+    "@types/mime-types": "^2.1.4",
+    "@types/node": "^20.14.15",
     "@types/ws": "^8.18.1",
     "chokidar": "^3.6.0",
     "commander": "^12.1.0",
     "dotenv": "^16.4.5",
-    "mime-types": "^2.1.35",
-    "ws": "^8.21.0",
-    "zod": "^3.23.8"
-  },
-  "devDependencies": {
-    "@eslint/js": "^9.9.0",
-    "@types/mime-types": "^2.1.4",
-    "@types/node": "^20.14.15",
     "esbuild": "^0.24.0",
     "eslint": "^9.9.0",
+    "mime-types": "^2.1.35",
     "tsx": "^4.16.5",
     "typescript": "^5.5.4",
-    "typescript-eslint": "^8.0.1"
+    "typescript-eslint": "^8.0.1",
+    "ws": "^8.21.0",
+    "zod": "^3.23.8"
   }
 }

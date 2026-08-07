@@ -16,10 +16,19 @@ importers:
         version: 5.9.3
 
   apps/agent:
-    dependencies:
+    devDependencies:
       '@cloudbox/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
+      '@eslint/js':
+        specifier: ^9.9.0
+        version: 9.39.4
+      '@types/mime-types':
+        specifier: ^2.1.4
+        version: 2.1.4
+      '@types/node':
+        specifier: ^20.14.15
+        version: 20.19.43
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
@@ -32,31 +41,15 @@ importers:
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1
-      mime-types:
-        specifier: ^2.1.35
-        version: 2.1.35
-      ws:
-        specifier: ^8.21.0
-        version: 8.21.0
-      zod:
-        specifier: ^3.23.8
-        version: 3.25.76
-    devDependencies:
-      '@eslint/js':
-        specifier: ^9.9.0
-        version: 9.39.4
-      '@types/mime-types':
-        specifier: ^2.1.4
-        version: 2.1.4
-      '@types/node':
-        specifier: ^20.14.15
-        version: 20.19.43
       esbuild:
         specifier: ^0.24.0
         version: 0.24.2
       eslint:
         specifier: ^9.9.0
         version: 9.39.4(jiti@2.7.0)
+      mime-types:
+        specifier: ^2.1.35
+        version: 2.1.35
       tsx:
         specifier: ^4.16.5
         version: 4.22.4
@@ -66,6 +59,12 @@ importers:
       typescript-eslint:
         specifier: ^8.0.1
         version: 8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+      ws:
+        specifier: ^8.21.0
+        version: 8.21.0
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
 
   apps/api:
     dependencies:
