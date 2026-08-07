@@ -2,10 +2,10 @@ import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { prisma } from "./prisma.js";
 
-const GOOGLE_CLIENT_ID = process.env["GOOGLE_CLIENT_ID"] ?? "";
-const GOOGLE_CLIENT_SECRET = process.env["GOOGLE_CLIENT_SECRET"] ?? "";
+const GOOGLE_CLIENT_ID = process.env["GOOGLE_CLIENT_ID"] || "dummy-client-id";
+const GOOGLE_CLIENT_SECRET = process.env["GOOGLE_CLIENT_SECRET"] || "dummy-client-secret";
 const GOOGLE_CALLBACK_URL =
-  process.env["GOOGLE_CALLBACK_URL"] ?? "http://localhost:4000/auth/google/callback";
+  process.env["GOOGLE_CALLBACK_URL"] || "http://localhost:4000/auth/google/callback";
 
 passport.use(
   new GoogleStrategy(

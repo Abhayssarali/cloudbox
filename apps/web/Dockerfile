@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM node:20-alpine AS base
+FROM node:20-slim AS base
 
 RUN npm install -g pnpm
 
@@ -18,9 +18,8 @@ COPY apps/web ./apps/web
 
 RUN pnpm --filter @cloudbox/shared-types build
 RUN pnpm --filter web build
-RUN pnpm prune --prod
 
-FROM node:20-alpine AS runner
+FROM node:20-slim AS runner
 
 WORKDIR /app
 ENV NODE_ENV=production
@@ -37,4 +36,5 @@ COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
 
 EXPOSE 3000
 
-CMD ["node_modules/.bin/next", "start", "apps/web", "-p", "3000"]
+WORKDIR /app/apps/web
+CMD ["node_modules/.bin/next", "start", "-p", "3000"]

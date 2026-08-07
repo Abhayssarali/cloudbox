@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 // API Helpers
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
 interface FileItem {
   id: string;
@@ -72,7 +72,7 @@ function ShareModal({ file, onClose }: { file: FileItem; onClose: () => void }) 
   
   const createShareLink = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`${API_URL}/api/sharing/links`, {
+      const res = await fetch(`${API_URL}/sharing/links`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -170,15 +170,21 @@ export default function FileExplorer() {
   const { data: files = [], isLoading, error, refetch } = useQuery({
     queryKey: ["files", currentFolderId],
     queryFn: async () => {
-      const url = currentFolderId 
-        ? `${API_URL}/api/files?parentId=${currentFolderId}`
-        : `${API_URL}/api/files`;
-      
-      const res = await fetch(url, {
-        credentials: "include"
-      });
+      const url = `${API_URL}/files`;
+      const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch files");
-      return res.json() as Promise<FileItem[]>;
+      const json = await res.json();
+      const rawFiles = json.data?.files ?? [];
+      return rawFiles.map((f: any) => ({
+        id: f.id,
+        name: f.name,
+        type: f.isFolder ? "folder" : "file",
+        size: parseInt(f.size ?? "0", 10),
+        mimeType: f.mimeType,
+        parentId: f.parentId,
+        createdAt: f.updatedAt,
+        updatedAt: f.updatedAt,
+      })) as FileItem[];
     },
     enabled: !!user
   });
@@ -186,12 +192,11 @@ export default function FileExplorer() {
   const { data: activeNodes = [] } = useQuery({
     queryKey: ["nodes", "active"],
     queryFn: async () => {
-      const res = await fetch(`${API_URL}/api/nodes`, {
-        credentials: "include"
-      });
+      const res = await fetch(`${API_URL}/agents/mine`, { credentials: "include" });
       if (!res.ok) return [];
-      const allNodes = await res.json();
-      return allNodes.filter((n: any) => n.status === "online");
+      const json = await res.json();
+      const agents = json.data?.agents ?? [];
+      return agents.filter((a: any) => a.status === "ONLINE");
     },
     enabled: !!user
   });
@@ -203,11 +208,8 @@ export default function FileExplorer() {
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append("file", file);
-      if (currentFolderId) {
-        formData.append("parentId", currentFolderId);
-      }
       
-      const res = await fetch(`${API_URL}/api/files/upload`, {
+      const res = await fetch(`${API_URL}/files/upload`, {
         method: "POST",
         credentials: "include",
         body: formData
@@ -219,7 +221,7 @@ export default function FileExplorer() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["files", currentFolderId] });
+      queryClient.invalidateQueries({ queryKey: ["files"] });
       queryClient.invalidateQueries({ queryKey: ["quota"] });
     },
     onError: (err: any) => {
@@ -229,14 +231,14 @@ export default function FileExplorer() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`${API_URL}/api/files/${id}`, {
+      const res = await fetch(`${API_URL}/files/${id}`, {
         method: "DELETE",
         credentials: "include"
       });
       if (!res.ok) throw new Error("Failed to delete");
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["files", currentFolderId] });
+      queryClient.invalidateQueries({ queryKey: ["files"] });
       setSelectedFileId(null);
     }
   });
@@ -296,7 +298,7 @@ export default function FileExplorer() {
 
   const handleDownload = async (file: FileItem) => {
     try {
-      const res = await fetch(`${API_URL}/api/files/${file.id}/download`, {
+      const res = await fetch(`${API_URL}/files/download/${file.id}`, {
         credentials: "include"
       });
       if (!res.ok) throw new Error("Download failed");

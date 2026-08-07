@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Wifi, WifiOff, HardDrive, FileText, Clock, Users, UserCheck, ChevronDown } from "lucide-react";
+import { Loader2, Wifi, WifiOff, HardDrive, FileText, Clock, Users, UserCheck, ChevronDown, X, Copy, Check } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -140,6 +140,9 @@ function AllocationSelector({ agent, users, groups }: { agent: Agent; users: Adm
 }
 
 export default function AdminAgents() {
+  const [claimCode, setClaimCode] = useState<string | null>(null);
+  const [isClaiming, setIsClaiming] = useState(false);
+
   const { data: agents = [], isLoading: agentsLoading, error } = useQuery<Agent[]>({
     queryKey: ["admin", "agents"],
     queryFn: async () => {
@@ -171,6 +174,20 @@ export default function AdminAgents() {
     },
   });
 
+  async function handleClaimNode() {
+    try {
+      setIsClaiming(true);
+      const res = await fetch(`${API_URL}/agents/claim`, { method: "POST", credentials: "include" });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "Failed to generate claim code");
+      setClaimCode(data.data.code);
+    } catch (err) {
+      alert(`Error generating claim code: ${(err as Error).message}`);
+    } finally {
+      setIsClaiming(false);
+    }
+  }
+
   if (error) {
     return (
       <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg">
@@ -184,11 +201,21 @@ export default function AdminAgents() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-white mb-1">Storage Node Health</h2>
-        <p className="text-sm text-gray-500">
-          Monitor and allocate storage nodes to users or groups.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-white mb-1">Storage Node Health</h2>
+          <p className="text-sm text-gray-500">
+            Monitor, register, and allocate storage nodes to users or groups.
+          </p>
+        </div>
+        <button
+          onClick={handleClaimNode}
+          disabled={isClaiming}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium text-sm transition-colors disabled:opacity-50 shadow-lg shadow-indigo-600/20"
+        >
+          {isClaiming ? <Loader2 className="w-4 h-4 animate-spin" /> : <HardDrive className="w-4 h-4" />}
+          + Add Storage Node
+        </button>
       </div>
 
       {/* Summary pills */}
@@ -289,6 +316,56 @@ export default function AdminAgents() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Claim Node Modal */}
+      {claimCode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#12141a] border border-[#1f2229] rounded-2xl p-6 max-w-lg w-full shadow-2xl relative">
+            <button
+              onClick={() => setClaimCode(null)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h3 className="text-xl font-bold text-white mb-2">Claim Storage Node</h3>
+            <p className="text-sm text-gray-400 mb-6">
+              Use this claim code on your storage machine to link it to your CloudBox network.
+            </p>
+
+            {/* Code Box */}
+            <div className="bg-[#0b0c10] border border-indigo-500/30 rounded-xl p-4 text-center mb-6">
+              <div className="text-xs uppercase tracking-widest text-indigo-400 font-semibold mb-1">Claim Code</div>
+              <div className="text-3xl font-mono font-extrabold text-white tracking-wider">{claimCode}</div>
+              <div className="text-xs text-gray-500 mt-2">Expires in 10 minutes</div>
+            </div>
+
+            {/* Steps */}
+            <div className="space-y-4 text-xs text-gray-300 mb-6">
+              <div className="bg-[#181a20] rounded-lg p-3 border border-[#252830]">
+                <div className="font-semibold text-white mb-1">Option A: Ubuntu Installer Script</div>
+                <code className="block bg-black/40 p-2 rounded text-emerald-400 font-mono overflow-x-auto select-all">
+                  sudo bash install.sh --claim {claimCode}
+                </code>
+              </div>
+
+              <div className="bg-[#181a20] rounded-lg p-3 border border-[#252830]">
+                <div className="font-semibold text-white mb-1">Option B: Development CLI</div>
+                <code className="block bg-black/40 p-2 rounded text-indigo-400 font-mono overflow-x-auto select-all">
+                  pnpm --filter agent run dev register {claimCode}
+                </code>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setClaimCode(null)}
+              className="w-full py-2.5 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              Done
+            </button>
+          </div>
         </div>
       )}
     </div>

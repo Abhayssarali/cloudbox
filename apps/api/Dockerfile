@@ -1,6 +1,8 @@
 # syntax=docker/dockerfile:1
-FROM node:20-alpine AS base
+FROM node:20-slim AS base
 
+# Install OpenSSL 1.1.x (required by Prisma 5.x engine)
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 RUN npm install -g pnpm
 
 WORKDIR /app
@@ -19,9 +21,8 @@ COPY apps/api ./apps/api
 RUN pnpm --filter api prisma:generate
 RUN pnpm --filter @cloudbox/shared-types build
 RUN pnpm --filter api build
-RUN pnpm prune --prod
 
-FROM node:20-alpine AS runner
+FROM base AS runner
 
 WORKDIR /app
 ENV NODE_ENV=production
