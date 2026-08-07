@@ -388,14 +388,14 @@ export default function AdminAgents() {
             {/* Steps */}
             <div className="space-y-4 text-xs text-gray-300 mb-6">
               <div className="bg-[#181a20] rounded-lg p-3 border border-[#252830]">
-                <div className="font-semibold text-white mb-1">Option A: Ubuntu Installer Script</div>
+                <div className="font-semibold text-white mb-1">Option A: Global NPM Package</div>
                 <code className="block bg-black/40 p-2 rounded text-emerald-400 font-mono overflow-x-auto select-all">
-                  sudo bash install.sh --claim {claimCode}
+                  npx cloudbox-agent register {claimCode}
                 </code>
               </div>
 
               <div className="bg-[#181a20] rounded-lg p-3 border border-[#252830]">
-                <div className="font-semibold text-white mb-1">Option B: Development CLI</div>
+                <div className="font-semibold text-white mb-1">Option B: Development Mode</div>
                 <code className="block bg-black/40 p-2 rounded text-indigo-400 font-mono overflow-x-auto select-all">
                   pnpm --filter agent run dev register {claimCode}
                 </code>

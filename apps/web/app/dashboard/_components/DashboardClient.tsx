@@ -488,10 +488,10 @@ export default function DashboardClient() {
                 </p>
                 <div className="flex items-center gap-2 bg-black/60 border border-white/[0.08] rounded-xl p-3">
                   <code className="text-xs text-indigo-300 font-mono flex-1 break-all">
-                    pnpm --filter agent run dev register {claimCode}
+                    npx cloudbox-agent register {claimCode}
                   </code>
                   <button
-                    onClick={() => copyToClipboard(`pnpm --filter agent run dev register ${claimCode}`, "reg")}
+                    onClick={() => copyToClipboard(`npx cloudbox-agent register ${claimCode}`, "reg")}
                     className="p-1.5 text-slate-400 hover:text-white transition-colors"
                   >
                     {copiedCmd === "reg" ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
