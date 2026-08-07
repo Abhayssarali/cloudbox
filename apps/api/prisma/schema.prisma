@@ -33,13 +33,15 @@ model User {
 }
 
 model Agent {
-  id            String      @id @default(uuid())
-  cloudId       String      @unique
-  userId        String
-  publicKey     String
-  status        AgentStatus @default(OFFLINE)
-  version       String?
+  id               String      @id @default(uuid())
+  cloudId          String      @unique
+  userId           String
+  publicKey        String
+  status           AgentStatus @default(OFFLINE)
+  version          String?
   lastHeartbeat    DateTime?
+  totalDiskBytes   BigInt?
+  freeDiskBytes    BigInt?
   createdAt        DateTime    @default(now())
   allocatedUserId  String?
   allocatedGroupId String?

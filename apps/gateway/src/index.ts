@@ -73,14 +73,20 @@ async function main() {
         const msg: GatewayMessage = JSON.parse(raw.toString());
 
         switch (msg.type) {
-          case "HEARTBEAT_ACK":
+          case "HEARTBEAT_ACK": {
             updateLastPong(cloudId);
-            // Also refresh lastHeartbeat in DB so the dashboard shows a fresh timestamp
+            const hb = msg as { type: string; totalDiskBytes?: number; freeDiskBytes?: number };
+            // Also refresh lastHeartbeat & disk capacity in DB
             prisma.agent.update({
               where: { cloudId },
-              data: { lastHeartbeat: new Date() },
+              data: {
+                lastHeartbeat: new Date(),
+                ...(hb.totalDiskBytes !== undefined && { totalDiskBytes: BigInt(Math.round(hb.totalDiskBytes)) }),
+                ...(hb.freeDiskBytes !== undefined && { freeDiskBytes: BigInt(Math.round(hb.freeDiskBytes)) }),
+              },
             }).catch(() => { /* ignore if agent was deleted */ });
             break;
+          }
 
           // Response messages from agent — relay back to API via Redis
           case "FILE_LIST_RESULT":

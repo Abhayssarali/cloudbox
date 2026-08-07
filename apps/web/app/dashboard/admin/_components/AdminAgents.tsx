@@ -17,10 +17,20 @@ type Agent = {
   fileCount: number;
   allocatedUser: { id: string; email: string } | null;
   allocatedGroup: { id: string; name: string } | null;
+  totalDiskBytes: string | null;
+  freeDiskBytes: string | null;
 };
 
 type AdminUser = { id: string; email: string };
 type Group = { id: string; name: string };
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
+}
 
 function timeAgo(iso: string | null): string {
   if (!iso) return "Never";
@@ -307,6 +317,39 @@ export default function AdminAgents() {
                   <div className="text-gray-300 font-medium">{agent.version ?? "—"}</div>
                 </div>
               </div>
+
+              {/* Disk Capacity Bar */}
+              {agent.totalDiskBytes && agent.freeDiskBytes ? (() => {
+                const total = parseInt(agent.totalDiskBytes);
+                const free = parseInt(agent.freeDiskBytes);
+                const used = total - free;
+                const pct = Math.min(100, Math.round((used / total) * 100));
+                const barColor = pct > 90 ? "bg-rose-500" : pct > 70 ? "bg-amber-500" : "bg-indigo-500";
+                return (
+                  <div className="mt-4 p-3 bg-black/20 rounded-lg">
+                    <div className="flex justify-between text-xs text-gray-400 mb-1.5">
+                      <span className="flex items-center gap-1">
+                        <HardDrive className="w-3 h-3" /> Disk Capacity
+                      </span>
+                      <span className="font-medium text-gray-300">{formatBytes(free)} free</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${barColor}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-gray-600 mt-1">
+                      <span>{formatBytes(used)} used</span>
+                      <span>{pct}% · {formatBytes(total)} total</span>
+                    </div>
+                  </div>
+                );
+              })() : agent.status === "ONLINE" ? (
+                <div className="mt-4 p-3 bg-black/20 rounded-lg text-xs text-gray-600 text-center">
+                  Awaiting disk stats… (next heartbeat)
+                </div>
+              ) : null}
 
               {/* Allocation selector */}
               <AllocationSelector agent={agent} users={users} groups={groups} />

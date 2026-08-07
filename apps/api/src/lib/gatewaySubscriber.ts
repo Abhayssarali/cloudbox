@@ -196,6 +196,21 @@ export async function initGatewaySubscriber() {
         await syncAgentFiles(agent.id, message.files);
       }
 
+      // Persist disk capacity stats from heartbeat ACK
+      if (message.type === "HEARTBEAT_ACK") {
+        const hb = message as unknown as { type: string; totalDiskBytes?: number; freeDiskBytes?: number };
+        if (hb.totalDiskBytes !== undefined || hb.freeDiskBytes !== undefined) {
+          await prisma.agent.update({
+            where: { cloudId },
+            data: {
+              ...(hb.totalDiskBytes !== undefined && { totalDiskBytes: BigInt(Math.round(hb.totalDiskBytes)) }),
+              ...(hb.freeDiskBytes !== undefined && { freeDiskBytes: BigInt(Math.round(hb.freeDiskBytes)) }),
+            },
+          });
+          console.log(`[GatewaySubscriber] Updated disk stats for cloudId=${cloudId}: total=${hb.totalDiskBytes}, free=${hb.freeDiskBytes}`);
+        }
+      }
+
       // Agent offline notification
       if ((message as unknown as { type: string; event?: string }).event === "AGENT_OFFLINE") {
         const agent = await prisma.agent.findUnique({

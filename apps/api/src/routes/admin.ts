@@ -310,6 +310,8 @@ adminRouter.get("/agents", async (req: Request, res: Response) => {
       fileCount: a._count.files,
       allocatedUser: a.allocatedUser,
       allocatedGroup: a.allocatedGroup,
+      totalDiskBytes: a.totalDiskBytes?.toString() ?? null,
+      freeDiskBytes: a.freeDiskBytes?.toString() ?? null,
     }));
 
     res.json({ success: true, data: { agents: formatted } });

@@ -138,6 +138,20 @@ program
 
             case "AUTH_OK": {
               console.log("[Agent] ✅ Authenticated! Agent is now ONLINE.");
+
+              // Send initial disk stats immediately
+              let totalDiskBytes: number | undefined;
+              let freeDiskBytes: number | undefined;
+              try {
+                const storageDir = path.join(CONFIG_DIR, "storage");
+                if (!fs.existsSync(storageDir)) fs.mkdirSync(storageDir, { recursive: true });
+                const stats = fs.statfsSync(storageDir);
+                totalDiskBytes = stats.blocks * stats.bsize;
+                freeDiskBytes = stats.bfree * stats.bsize;
+              } catch {
+                // statfsSync fallback
+              }
+              send(ws, { type: "HEARTBEAT_ACK", timestamp: Date.now(), totalDiskBytes, freeDiskBytes });
               
               if (activeWatcher) {
                 activeWatcher.close();
@@ -158,9 +172,22 @@ program
               ws.close();
               break;
 
-            case "HEARTBEAT":
-              send(ws, { type: "HEARTBEAT_ACK", timestamp: Date.now() });
+            case "HEARTBEAT": {
+              // Read disk stats from the storage directory's partition
+              let totalDiskBytes: number | undefined;
+              let freeDiskBytes: number | undefined;
+              try {
+                const storageDir = path.join(CONFIG_DIR, "storage");
+                if (!fs.existsSync(storageDir)) fs.mkdirSync(storageDir, { recursive: true });
+                const stats = fs.statfsSync(storageDir);
+                totalDiskBytes = stats.blocks * stats.bsize;
+                freeDiskBytes = stats.bfree * stats.bsize;
+              } catch {
+                // statfsSync may not be available on all platforms (e.g. Windows dev env)
+              }
+              send(ws, { type: "HEARTBEAT_ACK", timestamp: Date.now(), totalDiskBytes, freeDiskBytes });
               break;
+            }
 
             case "DOWNLOAD_FILE": {
               const dlPath = path.join(CONFIG_DIR, "storage", msg.path);
