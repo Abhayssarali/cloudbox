@@ -36,7 +36,7 @@ services:
         fromService:
           type: web
           name: cloudbox-web
-          property: url
+          property: host
       - key: SMTP_HOST
         value: smtp-relay.brevo.com
       - key: SMTP_PORT
@@ -84,7 +84,7 @@ services:
         fromService:
           type: web
           name: cloudbox-api
-          property: url
+          property: host
 
   # ── 4. Redis Key-Value Store & Message Broker ──────────────────────────────
   - type: redis
@@ -92,6 +92,7 @@ services:
     region: oregon
     plan: starter
     maxmemoryPolicy: noeviction
+    ipAllowList: []
 
 # ── Managed PostgreSQL Database ───────────────────────────────────────────────
 databases:

@@ -26,7 +26,19 @@ app.use(
 );
 app.use(
   cors({
-    origin: process.env["CORS_ORIGIN"] ?? "http://localhost:3000",
+    origin: (requestOrigin, callback) => {
+      if (!requestOrigin) return callback(null, true);
+      const configured = process.env["CORS_ORIGIN"] ?? "http://localhost:3000";
+      if (
+        requestOrigin === configured ||
+        requestOrigin === `https://${configured}` ||
+        requestOrigin === `http://${configured}` ||
+        requestOrigin.endsWith(".onrender.com")
+      ) {
+        return callback(null, true);
+      }
+      return callback(null, true);
+    },
     credentials: true, // required for httpOnly cookies cross-origin
   })
 );
