@@ -18,6 +18,9 @@ import { totpRouter } from "./routes/totp.js";
 
 const app: Express = express();
 
+// Trust reverse proxy (required for Render / cloud HTTPS load balancers)
+app.set("trust proxy", 1);
+
 // ---- Security & Middleware ----
 app.use(
   helmet({

@@ -438,6 +438,14 @@ authRouter.get("/me", requireAuth, async (req, res) => {
   });
 });
 
+function getFrontendUrl(): string {
+  const origin = process.env["CORS_ORIGIN"] ?? "http://localhost:3000";
+  if (origin.startsWith("http://") || origin.startsWith("https://")) {
+    return origin;
+  }
+  return `https://${origin}`;
+}
+
 // ---- GET /auth/google ----
 
 authRouter.get(
@@ -452,20 +460,20 @@ authRouter.get(
 
 authRouter.get(
   "/google/callback",
-  passport.authenticate("google", {
-    session: false,
-    failureRedirect: `${process.env["CORS_ORIGIN"] ?? "http://localhost:3000"}/login?error=google_failed`,
-  }),
+  (req, res, next) => {
+    passport.authenticate("google", {
+      session: false,
+      failureRedirect: `${getFrontendUrl()}/login?error=google_failed`,
+    })(req, res, next);
+  },
   (req, res) => {
     const user = req.user as { id: string; role: "SUPER_ADMIN" | "ADMIN" | "USER" } | undefined;
     if (!user) {
-      res.redirect(
-        `${process.env["CORS_ORIGIN"] ?? "http://localhost:3000"}/login?error=google_failed`
-      );
+      res.redirect(`${getFrontendUrl()}/login?error=google_failed`);
       return;
     }
 
     setAuthCookies(res, user.id, user.role);
-    res.redirect(`${process.env["CORS_ORIGIN"] ?? "http://localhost:3000"}/dashboard`);
+    res.redirect(`${getFrontendUrl()}/dashboard`);
   }
 );
