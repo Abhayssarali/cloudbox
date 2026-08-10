@@ -1,0 +1,102 @@
+# ==============================================================================
+# CloudBox — Render.com One-Click Blueprint Deployment Configuration
+# Docs: https://render.com/docs/blueprint-spec
+# ==============================================================================
+
+services:
+  # ── 1. API Web Service ──────────────────────────────────────────────────────
+  - type: web
+    name: cloudbox-api
+    runtime: docker
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    region: oregon
+    plan: starter
+    envVars:
+      - key: PORT
+        value: 4000
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cloudbox-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: cloudbox-redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        fromService:
+          type: web
+          name: cloudbox-web
+          property: url
+      - key: SMTP_HOST
+        value: smtp-relay.brevo.com
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+
+  # ── 2. Gateway Web Service (WebSocket Server) ───────────────────────────────
+  - type: web
+    name: cloudbox-gateway
+    runtime: docker
+    dockerfilePath: ./apps/gateway/Dockerfile
+    dockerContext: .
+    region: oregon
+    plan: starter
+    envVars:
+      - key: GATEWAY_PORT
+        value: 4001
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cloudbox-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: cloudbox-redis
+          property: connectionString
+
+  # ── 3. Web Dashboard Frontend (Next.js 16) ──────────────────────────────────
+  - type: web
+    name: cloudbox-web
+    runtime: docker
+    dockerfilePath: ./apps/web/Dockerfile
+    dockerContext: .
+    region: oregon
+    plan: starter
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: cloudbox-api
+          property: url
+
+  # ── 4. Redis Key-Value Store & Message Broker ──────────────────────────────
+  - type: redis
+    name: cloudbox-redis
+    region: oregon
+    plan: starter
+    maxmemoryPolicy: noeviction
+
+# ── Managed PostgreSQL Database ───────────────────────────────────────────────
+databases:
+  - name: cloudbox-db
+    databaseName: cloudbox_db
+    user: cloudbox
+    region: oregon
+    plan: starter

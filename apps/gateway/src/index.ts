@@ -10,7 +10,7 @@ import { unregisterSocket, updateLastPong, getSocket, getAllEntries } from "./re
 import { prisma } from "./lib/prisma.js";
 import { renderMetrics } from "./metrics.js";
 
-const PORT = Number(process.env.GATEWAY_PORT ?? 4001);
+const PORT = Number(process.env.GATEWAY_PORT ?? process.env.PORT ?? 4001);
 
 async function main() {
   // Connect to Redis first

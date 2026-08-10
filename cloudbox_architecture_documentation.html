@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CloudBox — Master Architecture & Technical Interview Documentation</title>
+  <style>
+    :root {
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-card: #1e293b;
+      --border-color: #334155;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --accent-blue: #38bdf8;
+      --accent-indigo: #818cf8;
+      --accent-green: #34d399;
+      --accent-amber: #fbbf24;
+      --accent-red: #f87171;
+      --code-bg: #090d16;
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      padding-bottom: 80px;
+    }
+    
+    header {
+      background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%);
+      border-bottom: 1px solid var(--border-color);
+      padding: 40px 20px;
+      text-align: center;
+    }
+    
+    header h1 {
+      font-size: 2.5rem;
+      background: linear-gradient(90deg, #38bdf8, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 10px;
+    }
+    
+    header p {
+      color: var(--text-secondary);
+      font-size: 1.1rem;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    
+    .badge-container {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 15px;
+      flex-wrap: wrap;
+    }
+    
+    .badge {
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: var(--accent-blue);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    
+    .badge.verified { background: rgba(52, 211, 153, 0.1); border-color: rgba(52, 211, 153, 0.3); color: var(--accent-green); }
+    .badge.inference { background: rgba(251, 191, 36, 0.1); border-color: rgba(251, 191, 36, 0.3); color: var(--accent-amber); }
+    .badge.not-found { background: rgba(248, 113, 113, 0.1); border-color: rgba(248, 113, 113, 0.3); color: var(--accent-red); }
+
+    .container {
+      max-width: 1200px;
+      margin: 30px auto;
+      padding: 0 20px;
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 30px;
+    }
+    
+    nav.toc {
+      position: sticky;
+      top: 20px;
+      height: calc(100vh - 40px);
+      overflow-y: auto;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    
+    nav.toc h3 {
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-secondary);
+      margin-bottom: 15px;
+    }
+    
+    nav.toc ul {
+      list-style: none;
+    }
+    
+    nav.toc li {
+      margin-bottom: 8px;
+    }
+    
+    nav.toc a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: color 0.2s;
+      display: block;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+    
+    nav.toc a:hover {
+      color: var(--accent-blue);
+      background: rgba(56, 189, 248, 0.05);
+    }
+    
+    main {
+      min-width: 0;
+    }
+    
+    section {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 30px;
+    }
+    
+    h2 {
+      font-size: 1.8rem;
+      color: var(--accent-blue);
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 10px;
+    }
+    
+    h3 {
+      font-size: 1.3rem;
+      color: var(--accent-indigo);
+      margin: 25px 0 12px 0;
+    }
+
+    h4 {
+      font-size: 1.05rem;
+      color: var(--text-primary);
+      margin: 15px 0 8px 0;
+    }
+    
+    p { margin-bottom: 15px; color: #cbd5e1; }
+    
+    ul, ol {
+      margin-bottom: 20px;
+      padding-left: 25px;
+      color: #cbd5e1;
+    }
+    
+    li { margin-bottom: 6px; }
+
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      font-family: "Fira Code", Monaco, Consolas, monospace;
+      font-size: 0.88rem;
+      color: #e2e8f0;
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+
+    code {
+      font-family: "Fira Code", Monaco, Consolas, monospace;
+      background: rgba(255, 255, 255, 0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.9em;
+      color: var(--accent-blue);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 25px;
+      font-size: 0.92rem;
+    }
+
+    th, td {
+      border: 1px solid var(--border-color);
+      padding: 12px;
+      text-align: left;
+    }
+
+    th {
+      background: #0f172a;
+      color: var(--accent-blue);
+    }
+
+    tr:nth-child(even) {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .callout {
+      border-left: 4px solid var(--accent-blue);
+      background: rgba(56, 189, 248, 0.05);
+      padding: 15px 20px;
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 20px;
+    }
+
+    .callout.warning {
+      border-left-color: var(--accent-amber);
+      background: rgba(251, 191, 36, 0.05);
+    }
+
+    .callout.danger {
+      border-left-color: var(--accent-red);
+      background: rgba(248, 113, 113, 0.05);
+    }
+
+    .tag-verified { color: var(--accent-green); font-weight: bold; font-size: 0.8em; }
+    .tag-inference { color: var(--accent-amber); font-weight: bold; font-size: 0.8em; }
+    .tag-not-found { color: var(--accent-red); font-weight: bold; font-size: 0.8em; }
+
+    @media (max-width: 900px) {
+      .container { grid-template-columns: 1fr; }
+      nav.toc { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>CloudBox — Technical Architecture & Interview Master Guide</h1>
+  <p>Comprehensive end-to-end breakdown of the CloudBox distributed self-hosted cloud storage engine. Derived directly from repository source code analysis.</p>
+  <div class="badge-container">
+    <span class="badge verified">✓ VERIFIED FROM CODE</span>
+    <span class="badge inference">⚠ INFERENCE</span>
+    <span class="badge not-found">✕ NOT FOUND</span>
+  </div>
+</header>
+
+<div class="container">
+  <nav class="toc">
+    <h3>Sections</h3>
+    <ul>
+      <li><a href="#sec-01">01. Project Overview</a></li>
+      <li><a href="#sec-02">02. System Architecture</a></li>
+      <li><a href="#sec-03">03. Service Breakdown</a></li>
+      <li><a href="#sec-04">04. Data Flows</a></li>
+      <li><a href="#sec-05">05. Request Lifecycle</a></li>
+      <li><a href="#sec-06">06. Database Design</a></li>
+      <li><a href="#sec-07">07. Redis & Cache</a></li>
+      <li><a href="#sec-08">08. Algorithms</a></li>
+      <li><a href="#sec-09">09. Concurrency & Async</a></li>
+      <li><a href="#sec-10">10. WebSockets</a></li>
+      <li><a href="#sec-11">11. External Integrations</a></li>
+      <li><a href="#sec-12">12. Security & Auth</a></li>
+      <li><a href="#sec-13">13. Frontend Architecture</a></li>
+      <li><a href="#sec-14">14. Tech Stack</a></li>
+      <li><a href="#sec-15">15. Why This Tech?</a></li>
+      <li><a href="#sec-16">16. Docker Containerization</a></li>
+      <li><a href="#sec-17">17. Deployment</a></li>
+      <li><a href="#sec-18">18. Dev vs Prod</a></li>
+      <li><a href="#sec-19">19. Scalability</a></li>
+      <li><a href="#sec-20">20. Failure Scenarios</a></li>
+      <li><a href="#sec-21">21. Tradeoffs & Weaknesses</a></li>
+      <li><a href="#sec-22">22. "Why Not X?" Qs</a></li>
+      <li><a href="#sec-23">23. Interview Q&A</a></li>
+      <li><a href="#sec-24">24. Important Snippets</a></li>
+      <li><a href="#sec-25">25. End-to-End Scenarios</a></li>
+      <li><a href="#sec-26">26. Final Cheat Sheet</a></li>
+      <li><a href="#sec-27">27. 2-Minute Pitch</a></li>
+    </ul>
+  </nav>
+
+  <main>
+    <!-- SECTION 01 -->
+    <section id="sec-01">
+      <h2>01. Project Overview</h2>
+      <p><strong>CloudBox</strong> is a production-grade, distributed self-hosted personal cloud storage ecosystem engineered as a TypeScript monorepo using <code>pnpm</code> workspaces. Instead of forcing users to store files on centralized third-party servers, CloudBox enables users to register their own local devices (PC, Home Server, Raspberry Pi) as remote storage nodes via a lightweight Node.js CLI agent. The platform provides a modern Next.js 16 Web Dashboard, an Express REST API backend, an event-driven WebSocket Gateway for tunneling file chunks across NATs/firewalls via RSA-signed authentication, a PostgreSQL database managed via Prisma ORM, and a Redis pub/sub backbone for inter-service RPC coordination.</p>
+
+      <h3>One-Line Explanation</h3>
+      <p>A hybrid cloud-edge storage platform that turns personal machines into secure, remote storage nodes accessible through a centralized web dashboard and WebSocket gateway.</p>
+
+      <h3>What Problem Does It Solve?</h3>
+      <ul>
+        <li><strong>Problem:</strong> Cloud storage providers (Dropbox, Google Drive, OneDrive) are expensive, enforce strict storage caps, and hold user privacy at risk. Traditional self-hosted solutions (like Nextcloud or NAS) require complex port forwarding, static public IPs, or dynamic DNS setups to access storage outside the home network.</li>
+        <li><strong>Target Users:</strong> Developers, homelab enthusiasts, remote teams, and privacy-conscious users who want centralized cloud access to decentralized storage hardware.</li>
+        <li><strong>Main Purpose:</strong> Provide zero-configuration NAT traversal for personal storage nodes, allowing secure remote file uploads, downloads, streaming, trash recovery, versioning, and public sharing over standard HTTPS/WSS.</li>
+      </ul>
+
+      <h3>Major Features</h3>
+      <table>
+        <thead>
+          <tr><th>Feature</th><th>Implements Service</th><th>Technologies</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Cryptographic Agent Registration & Authentication</td><td><code>apps/agent</code>, <code>apps/api</code>, <code>apps/gateway</code></td><td>2048-bit RSA Keypair, Redis Claim Codes, SHA256 Signatures</td></tr>
+          <tr><td>Real-Time Bi-directional File Streaming</td><td><code>apps/api</code>, <code>apps/gateway</code>, <code>apps/agent</code></td><td>Busboy Streams, Base64 Chunking (64KB), EventEmitter, Redis Pub/Sub</td></tr>
+          <tr><td>Incremental File System Mirroring & Reconciliation</td><td><code>apps/agent</code>, <code>apps/api</code></td><td>Chokidar FS Watcher, 2-Pass Tree Linker, Debounced Scanning</td></tr>
+          <tr><td>Multi-Tenant Workspaces & Multi-Factor Auth</td><td><code>apps/api</code>, <code>apps/web</code></td><td>Argon2id, JWT Cookies (Access/Refresh), Passport Google OAuth, TOTP 2FA (RFC 6238), Brevo Email OTP</td></tr>
+          <tr><td>File Versioning, Soft-Delete Trash & Public Links</td><td><code>apps/api</code>, <code>apps/web</code></td><td>Prisma ORM, PostgreSQL Cascades, Tokenized Expirable Links</td></tr>
+          <tr><td>Workspace Agent Allocation & Quotas</td><td><code>apps/api</code>, <code>apps/web</code></td><td>RBAC (SUPER_ADMIN, ADMIN, USER), Granular Quota Locks</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SECTION 02 -->
+    <section id="sec-02">
+      <h2>02. Complete System Architecture</h2>
+      <pre>
+                                     ┌───────────────────────────────────────────────────────────┐
+                                     │                      BROWSER CLIENT                       │
+                                     │                (Next.js 16 Web Dashboard)                 │
+                                     └───────────────┬───────────────────────────┬───────────────┘
+                                                     │ HTTP / REST               │ Public Share
+                                                     ▼                           ▼
+                                     ┌───────────────────────────────────────────────────────────┐
+                                     │                    NGINX REVERSE PROXY                    │
+                                     │              (Ports 80 / 443 -> SSL Termination)           │
+                                     └───────┬───────────────────────────┬───────────────┬───────┘
+                                             │                           │               │
+                              /api/* (4000)  │             gateway.*     │ (4001)        │ / (3000)
+                                             ▼              (WebSocket)  ▼               ▼
+┌─────────────────────────────────────────────────┐                     ┌───────────────────────────────────┐
+│                 MAIN API BACKEND                │                     │         WEBSOCKET GATEWAY         │
+│          (Express / Node.js TypeScript)         │                     │  (Node.js native 'ws' Server)     │
+│                                                 │                     │                                   │
+│  - Routes: /auth, /files, /agents, /admin, etc. │                     │ - RSA-2048 Auth Handshake         │
+│  - Busboy multipart file streaming              │                     │ - Socket Connection Registry      │
+│  - RequestRegistry EventEmitter (Wait for ACK)  │                     │ - 30s Heartbeat & Stale Reset     │
+└────────┬────────────────────────┬───────────────┘                     └────────┬──────────────────┬───────┘
+         │                        │                                              │                  │
+         │ SQL (Prisma)           │ Pub/Sub (gateway:commands / gateway:responses)│ Redis            │ SQL (Prisma)
+         ▼                        ▼                                              ▼                  ▼
+┌───────────────────┐    ┌───────────────────┐                          ┌───────────────────────────────────┐
+│ PostgreSQL 16 DB  │    │   REDIS 7 SERVER  │◄─────────────────────────┤          STORAGE AGENT            │
+│  - Users, Agents  │    │                   │   Command / Chunk Relay  │     (Desktop/Server CLI Node)     │
+│  - Files, Versions│    │ - Pub/Sub Channels│                          │                                   │
+│  - Groups, Logs   │    │ - OTP & Claim TTL │                          │ - Chokidar FS Watcher (~/.cloudbox│
+└───────────────────┘    └───────────────────┘                          │ - Outbound WSS Connection         │
+                                                                        │ - Local Storage Read/Write Streams│
+                                                                        └───────────────────────────────────┘
+      </pre>
+    </section>
+
+    <!-- SECTION 03 -->
+    <section id="sec-03">
+      <h2>03. Service-by-Service Breakdown</h2>
+      
+      <h3>1. Main API Backend (<code>apps/api</code>)</h3>
+      <ul>
+        <li><strong>Responsibility:</strong> HTTP REST endpoints, user authentication, workspace administration, file metadata database operations, email dispatch, and initiating file streaming commands over Redis.</li>
+        <li><strong>Entry Point:</strong> <code>apps/api/src/index.ts</code> & <code>apps/api/src/app.ts</code></li>
+        <li><strong>Key Files:</strong>
+          <ul>
+            <li><code>routes/auth.ts</code>: User registration, login, JWT cookie management, Google OAuth callback, email OTP verification.</li>
+            <li><code>routes/files.ts</code>: File upload (busboy streaming), download tunnel, soft-delete, restore, permanent wipe, version query.</li>
+            <li><code>routes/agents.ts</code>: Claim code generation (Redis 10m TTL), agent registration endpoint.</li>
+            <li><code>routes/admin.ts</code>: Workspace user/agent quota allocation, role assignments, audit logs.</li>
+            <li><code>lib/gatewaySubscriber.ts</code>: Listens on Redis channel <code>gateway:responses</code>, executes DB reconciliation algorithm for <code>METADATA_SYNC</code>.</li>
+            <li><code>lib/requestRegistry.ts</code>: Singleton <code>EventEmitter</code> that maps async Redis chunk events to pending HTTP response streams via <code>requestId</code>.</li>
+          </ul>
+        </li>
+        <li><strong>Scaling:</strong> Horizontally scalable behind Nginx. It is completely stateless with respect to file uploads/downloads because all session state lives in JWT HTTP-only cookies and inter-service state is synchronized via Redis.</li>
+      </ul>
+
+      <h3>2. WebSocket Gateway (<code>apps/gateway</code>)</h3>
+      <ul>
+        <li><strong>Responsibility:</strong> Maintains persistent TCP WebSocket connections with remote Storage Agents. Handles RSA cryptographic challenge authentication, sends periodic pings (30s interval), routes file commands from API to Agents, and publishes Agent responses back to Redis.</li>
+        <li><strong>Entry Point:</strong> <code>apps/gateway/src/index.ts</code></li>
+        <li><strong>Key Files:</strong>
+          <ul>
+            <li><code>auth.ts</code>: Performs 3-step handshake: Sends 32-byte hex challenge, receives base64 RSA signature, verifies with stored Public Key using Node <code>crypto</code>.</li>
+            <li><code>heartbeat.ts</code>: Runs 30s <code>setInterval</code> ping. Terminates sockets and marks agents <code>OFFLINE</code> if silent for >65s.</li>
+            <li><code>relay.ts</code>: Subscribes to Redis channel <code>gateway:commands</code> and publishes to <code>gateway:responses</code>.</li>
+            <li><code>registry.ts</code>: In-memory <code>Map&lt;string, SocketEntry&gt;</code> mapping <code>cloudId</code> to live <code>WebSocket</code> objects.</li>
+          </ul>
+        </li>
+        <li><strong>Scaling:</strong> Single-instance per Gateway instance by default due to in-memory socket registry. Can scale horizontally if an upstream router routes by <code>cloudId</code> or by adopting Redis WebSocket socket registry adapter. <span class="tag-inference">(INFERENCE)</span></li>
+      </ul>
+
+      <h3>3. Storage Node Agent (<code>apps/agent</code>)</h3>
+      <ul>
+        <li><strong>Responsibility:</strong> Executable Node CLI tool running on remote hardware. Connects via outbound WSS to Gateway, signs auth challenges with local private key, watches local directory <code>~/.cloudbox/storage</code> with <code>chokidar</code>, and executes chunked file read/write disk I/O.</li>
+        <li><strong>Entry Point:</strong> <code>apps/agent/src/index.ts</code></li>
+        <li><strong>Key Files:</strong>
+          <ul>
+            <li><code>watcher.ts</code>: Uses <code>chokidar</code> to watch local files with 1-second debounce. Scans recursive tree, computes MIME types, generates relative path metadata array.</li>
+            <li><code>index.ts</code>: CLI setup via <code>commander</code>. Implements <code>register</code> and <code>start</code> commands. Manages backoff reconnection (1s to 30s exponential). Reads files via 64KB chunks (<code>fs.createReadStream</code>) and writes incoming base64 chunks via <code>fs.createWriteStream</code>.</li>
+          </ul>
+        </li>
+      </ul>
+    </section>
+
+    <!-- SECTION 04 -->
+    <section id="sec-04">
+      <h2>04. Complete Data Flows</h2>
+
+      <h3>Flow A — User Signup & Email OTP Verification <span class="tag-verified">(VERIFIED)</span></h3>
+      <ol>
+        <li>User submits email, password, and workspace option (create workspace or invite code) to <code>POST /auth/signup</code>.</li>
+        <li><code>auth.ts</code> validates inputs via Zod, checks email uniqueness in Prisma, hashes password with <code>argon2.hash()</code>.</li>
+        <li>If creating workspace: creates <code>User</code> (role=ADMIN) and nested <code>Group</code> in PostgreSQL, updates user <code>groupId</code>.</li>
+        <li>If joining: verifies <code>inviteCode</code> in <code>Group</code> table, creates <code>User</code> (role=USER, <code>groupId</code> linked).</li>
+        <li>System generates cryptographically random 6-digit OTP using <code>crypto.randomInt()</code>, stores it in Redis at <code>email_otp:&lt;userId&gt;</code> with 600s TTL.</li>
+        <li>Nodemailer sends HTML email containing OTP via Brevo SMTP (<code>smtp-relay.brevo.com:587</code>). Returns <code>{ requiresVerification: true }</code> to frontend.</li>
+        <li>User submits OTP to <code>POST /auth/verify-email</code>. <code>emailOtp.ts</code> compares code with Redis value. On match, deletes Redis key, updates user <code>emailVerified: true</code> in PostgreSQL, and sets HTTP-only auth cookies.</li>
+      </ol>
+
+      <h3>Flow B — Agent Cryptographic Claim & Registration <span class="tag-verified">(VERIFIED)</span></h3>
+      <ol>
+        <li>Authenticated user clicks "Add Storage Node" in Web Dashboard. Frontend calls <code>POST /agents/claim</code>.</li>
+        <li>API generates 6-character hex code using <code>crypto.randomBytes(3)</code>, sets Redis key <code>claim:&lt;hexCode&gt;</code> = <code>userId</code> (600s TTL).</li>
+        <li>User runs CLI command on remote node: <code>cloudbox-agent register &lt;CODE&gt;</code>.</li>
+        <li>Agent generates 2048-bit RSA keypair (SPKI public key PEM, PKCS8 private key PEM) and a random UUID <code>cloudId</code>.</li>
+        <li>Agent posts <code>{ claimCode, cloudId, publicKey }</code> to <code>POST /agents/register</code> on API.</li>
+        <li>API fetches <code>userId</code> from Redis key <code>claim:&lt;claimCode&gt;</code>. If valid, creates row in <code>agents</code> table (status=OFFLINE, stores RSA public key). Deletes Redis key. Agent saves config to <code>~/.cloudbox/agent.json</code>.</li>
+      </ol>
+
+      <h3>Flow C — File Upload Pipeline (Browser → API → Gateway → Agent Disk) <span class="tag-verified">(VERIFIED)</span></h3>
+      <ol>
+        <li>User selects file in dashboard and posts to <code>POST /files/upload?folder=/path&amp;agentId=...</code></li>
+        <li>API checks user storage quota (<code>usedBytes + expectedSize &lt;= quotaBytes</code>). Resolves target agent, ensuring status is <code>ONLINE</code> and <code>lastHeartbeat</code> &gt; 2 mins ago.</li>
+        <li>API initializes <code>Busboy</code> multipart stream parser and generates a <code>requestId</code> (UUID).</li>
+        <li>API sends Redis command to channel <code>gateway:commands</code>: <code>{ type: "UPLOAD_FILE", path, requestId }</code>. Gateway relays payload to Agent WebSocket. Agent initializes local <code>fs.createWriteStream</code> at <code>~/.cloudbox/storage/path</code>.</li>
+        <li>As browser streams bytes into API, Busboy reads file chunks. API slices buffer into 64KB segments, encodes to base64, and publishes <code>FILE_CHUNK</code> commands to Redis. Gateway relays each chunk to Agent over WebSocket.</li>
+        <li>Agent receives <code>FILE_CHUNK</code>, converts base64 back to binary Buffer, and writes to disk stream.</li>
+        <li>When browser upload completes, API publishes <code>FILE_CHUNK</code> with <code>final: true</code>. Agent closes write stream, triggers local <code>scanDirectory()</code>, and sends <code>UPLOAD_ACK</code> over WebSocket.</li>
+        <li>Gateway publishes <code>UPLOAD_ACK</code> to Redis <code>gateway:responses</code>. <code>GatewaySubscriber</code> in API receives ACK and emits event to <code>requestRegistry</code> singleton using <code>requestId</code>.</li>
+        <li>API handler unblocks, increments user <code>usedBytes</code> in PostgreSQL, creates snapshot row in <code>file_versions</code> table if file previously existed, checks 80%/95% quota warning thresholds, and returns HTTP 200 JSON.</li>
+      </ol>
+
+      <h3>Flow D — Real-Time Metadata Sync (Agent → Gateway → API DB Reconciliation) <span class="tag-verified">(VERIFIED)</span></h3>
+      <ol>
+        <li>Agent directory watcher (<code>chokidar</code>) detects file addition, modification, or deletion in <code>~/.cloudbox/storage</code>.</li>
+        <li>Watcher debounces events for 1000ms, scans directory recursively using <code>fs.readdirSync()</code>, and formats <code>ScanResult[]</code> array.</li>
+        <li>Agent sends <code>METADATA_SYNC</code> message over WebSocket to Gateway. Gateway publishes message to Redis <code>gateway:responses</code>.</li>
+        <li>API <code>GatewaySubscriber</code> picks up payload and executes 2-Pass Reconciliation Algorithm (<code>syncAgentFiles</code>):
+          <ul>
+            <li><em>Pass 1: Directory Synthesis & Diffing:</em> Synthesizes parent folder paths missing from scan. Fetches existing files from PostgreSQL. Deletes files missing from scan. Upserts files whose size, mtime, or MIME type changed.</li>
+            <li><em>Pass 2: Tree Relinking:</em> Queries updated files, resolves parent directory paths, and updates <code>parentId</code> foreign keys to construct exact directory hierarchy.</li>
+          </ul>
+        </li>
+      </ol>
+    </section>
+
+    <!-- SECTION 05 -->
+    <section id="sec-05">
+      <h2>05. Request Lifecycle</h2>
+      <pre>
+Browser (Fetch / HTML Form)
+  │
+  ├─► Nginx Reverse Proxy (SSL Termination on Port 443)
+  │     │
+  │     ├─► Proxy Pass to http://127.0.0.1:4000 (API)
+  │
+  ├─► Express Application Pipeline (apps/api/src/app.ts)
+  │     │
+  │     ├── 1. Morgan HTTP Logging Middleware
+  │     ├── 2. Helmet Security Headers (HSTS, NoSniff, XSS Protection)
+  │     ├── 3. CORS Middleware (Origin matching process.env.CORS_ORIGIN, credentials: true)
+  │     ├── 4. Cookie Parser Middleware (Extracts req.cookies.cb_access)
+  │     ├── 5. JSON Body Parser (express.json limit: 10mb)
+  │     ├── 6. Authentication Middleware (requireAuth in middleware/auth.ts)
+  │     │       └─► Verifies JWT access token using process.env.JWT_SECRET
+  │     ├── 7. Role Authorization Middleware (requireRole("ADMIN", "SUPER_ADMIN"))
+  │     ├── 8. Route Handler Execution (Zud Schema Validation)
+  │     ├── 9. Prisma ORM Query / Redis Command Dispatch
+  │     └── 10. Standard JSON Response Formatting ({ success: true, data: { ... } })
+      </pre>
+    </section>
+
+    <!-- SECTION 06 -->
+    <section id="sec-06">
+      <h2>06. Database Design</h2>
+      <p><strong>Database Engine:</strong> PostgreSQL 16 (Alpine Container)</p>
+      <p><strong>ORM:</strong> Prisma 5.17.0</p>
+
+      <h3>Schema Entity-Relationship Breakdown</h3>
+      <table>
+        <thead>
+          <tr><th>Table</th><th>Purpose</th><th>Important Columns</th><th>Indexes & Constraints</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>users</code></td>
+            <td>User accounts & quotas</td>
+            <td><code>id</code> (UUID), <code>email</code>, <code>passwordHash</code>, <code>role</code> (Enum), <code>quotaBytes</code> (BigInt), <code>usedBytes</code> (BigInt), <code>groupId</code></td>
+            <td><code>email</code> (UNIQUE), <code>googleId</code> (UNIQUE), Foreign Key to <code>groups(id)</code></td>
+          </tr>
+          <tr>
+            <td><code>agents</code></td>
+            <td>Remote storage node metadata</td>
+            <td><code>id</code> (UUID), <code>cloudId</code> (UUID), <code>userId</code>, <code>publicKey</code>, <code>status</code> (ONLINE/OFFLINE), <code>lastHeartbeat</code></td>
+            <td><code>cloudId</code> (UNIQUE), Foreign Keys to <code>users(userId)</code>, <code>users(allocatedUserId)</code>, <code>groups(allocatedGroupId)</code></td>
+          </tr>
+          <tr>
+            <td><code>files</code></td>
+            <td>File & directory metadata tree</td>
+            <td><code>id</code> (UUID), <code>agentId</code>, <code>path</code>, <code>name</code>, <code>size</code> (BigInt), <code>isFolder</code>, <code>parentId</code>, <code>deletedAt</code></td>
+            <td>Composite UNIQUE <code>[agentId, path]</code>, Index on <code>[deletedAt]</code></td>
+          </tr>
+          <tr>
+            <td><code>share_links</code></td>
+            <td>Public expirable share links</td>
+            <td><code>id</code> (UUID), <code>fileId</code>, <code>token</code> (Hex), <code>expiresAt</code>, <code>createdAt</code></td>
+            <td><code>token</code> (UNIQUE), Foreign Key <code>fileId</code> ON DELETE CASCADE</td>
+          </tr>
+          <tr>
+            <td><code>file_versions</code></td>
+            <td>Historical file version snapshots</td>
+            <td><code>id</code> (UUID), <code>fileId</code>, <code>versionNumber</code> (Int), <code>size</code> (BigInt), <code>storagePath</code></td>
+            <td>Foreign Key <code>fileId</code> ON DELETE CASCADE</td>
+          </tr>
+          <tr>
+            <td><code>groups</code></td>
+            <td>Workspace isolation units</td>
+            <td><code>id</code> (UUID), <code>name</code>, <code>inviteCode</code> (CUID), <code>ownerId</code></td>
+            <td><code>name</code> (UNIQUE), <code>inviteCode</code> (UNIQUE)</td>
+          </tr>
+          <tr>
+            <td><code>activity_logs</code></td>
+            <td>Audit activity tracking</td>
+            <td><code>id</code> (UUID), <code>userId</code>, <code>action</code>, <code>meta</code> (JSON String)</td>
+            <td>Foreign Key <code>userId</code> ON DELETE SET NULL</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SECTION 07 -->
+    <section id="sec-07">
+      <h2>07. Redis / Cache / Message Queue</h2>
+      <p><strong>Redis Version:</strong> Redis 7 (Alpine Container)</p>
+      <p><strong>Client Library:</strong> <code>ioredis</code> 5.4.x</p>
+
+      <h3>Redis Key & Channel Directory</h3>
+      <table>
+        <thead>
+          <tr><th>Pattern / Channel</th><th>Type</th><th>TTL</th><th>Writer</th><th>Reader</th><th>Purpose</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>gateway:commands</code></td>
+            <td>Pub/Sub Channel</td>
+            <td>N/A</td>
+            <td>API Backend</td>
+            <td>Gateway Server</td>
+            <td>Relays file operation commands (UPLOAD, DOWNLOAD, DELETE) from API to Agent.</td>
+          </tr>
+          <tr>
+            <td><code>gateway:responses</code></td>
+            <td>Pub/Sub Channel</td>
+            <td>N/A</td>
+            <td>Gateway Server</td>
+            <td>API GatewaySubscriber</td>
+            <td>Relays agent ACKs, file chunks, and metadata sync payloads back to API.</td>
+          </tr>
+          <tr>
+            <td><code>claim:&lt;hexCode&gt;</code></td>
+            <td>String</td>
+            <td>600s (10m)</td>
+            <td>API (<code>POST /agents/claim</code>)</td>
+            <td>API (<code>POST /agents/register</code>)</td>
+            <td>Stores short-lived 6-character claim code mapping code to <code>userId</code>.</td>
+          </tr>
+          <tr>
+            <td><code>email_otp:&lt;userId&gt;</code></td>
+            <td>String</td>
+            <td>600s (10m)</td>
+            <td>API (<code>emailOtp.ts</code>)</td>
+            <td>API (<code>POST /auth/verify-email</code>)</td>
+            <td>Stores 6-digit email signup verification code. One-time use.</td>
+          </tr>
+          <tr>
+            <td><code>quota_notify:&lt;userId&gt;:80</code></td>
+            <td>String</td>
+            <td>86400s (24h)</td>
+            <td>API (<code>quotaNotifier.ts</code>)</td>
+            <td>API (<code>quotaNotifier.ts</code>)</td>
+            <td>Deduplicates 80% quota warning email alerts so user receives max 1 per day.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <strong>What happens if Redis goes down?</strong><br>
+        If Redis crashes, critical HTTP auth and CRUD operations reading/writing to PostgreSQL continue to function. However, realtime Agent communications (file uploads/downloads, live metadata syncs, and CLI claim code registrations) will fail immediately because inter-service RPC depends on Redis Pub/Sub channels.
+      </div>
+    </section>
+
+    <!-- SECTION 08 -->
+    <section id="sec-08">
+      <h2>08. Core Business Logic / Algorithms</h2>
+
+      <h3>2-Pass Directory Tree Reconciliation Algorithm</h3>
+      <p><strong>Problem:</strong> When an Agent scans its local file directory, it returns a flat list of file paths (e.g., <code>["/docs/work/file.txt"]</code>). The database requires a relational hierarchy with correct <code>parentId</code> references pointing to parent directory records, while handling concurrent file additions, edits, and deletions.</p>
+      <p><strong>Location:</strong> <code>apps/api/src/lib/gatewaySubscriber.ts</code> -> <code>syncAgentFiles()</code></p>
+      
+      <h4>Step-by-Step Logic:</h4>
+      <ol>
+        <li><strong>Path Synthesis:</strong> Iterates over incoming paths. Synthesizes missing intermediate directory records (e.g., automatically inserts <code>/docs</code> and <code>/docs/work</code> if missing from payload).</li>
+        <li><strong>Differential Deletion:</strong> Queries all existing files in PostgreSQL for the current <code>agentId</code>. Identifies files present in DB but absent from scan payload and executes batch <code>deleteMany()</code>.</li>
+        <li><strong>Attribute Upserting:</strong> Compares size, modification timestamp (<code>mtime</code>), and MIME type between incoming scan items and DB records. Executes atomic updates for modified files or creates new <code>File</code> rows.</li>
+        <li><strong>Parent Link Reconstruction (Pass 2):</strong> Queries all database files for the agent. Computes exact parent folder paths, maps parent paths to directory IDs, and updates <code>parentId</code> foreign keys across all records.</li>
+      </ol>
+      <p><strong>Complexity:</strong> Time Complexity: $O(N \log N)$ where $N$ is the number of files (due to Map lookups and sorting). Space Complexity: $O(N)$ memory footprint to store current file tree maps.</p>
+    </section>
+
+    <!-- SECTION 09 -->
+    <section id="sec-09">
+      <h2>09. Concurrency & Asynchronous Processing</h2>
+      <ul>
+        <li><strong>Node.js Event Loop:</strong> Non-blocking single-threaded asynchronous execution using <code>async/await</code>, Promises, and Node streams.</li>
+        <li><strong>Request Synchronization via EventEmitter:</strong> The API handles asynchronous file stream chunks using <code>RequestRegistry</code> (an <code>EventEmitter</code> instance with <code>setMaxListeners(500)</code>). HTTP requests wait for matching <code>requestId</code> events emitted by the Redis Gateway subscriber.</li>
+        <li><strong>Race Condition Prevention:</strong> 
+          <ul>
+            <li>PostgreSQL unique compound constraint <code>@@unique([agentId, path])</code> prevents duplicate file paths per storage node under concurrent uploads.</li>
+            <li>Prisma atomic increment operators (<code>usedBytes: { increment: expectedSize }</code>) prevent race conditions on user storage quota calculations.</li>
+          </ul>
+        </li>
+      </ul>
+    </section>
+
+    <!-- SECTION 10 -->
+    <section id="sec-10">
+      <h2>10. WebSockets / Real-Time System</h2>
+      
+      <h3>Handshake & Authentication Lifecycle <span class="tag-verified">(VERIFIED)</span></h3>
+      <pre>
+Agent                              Gateway                             Database
+  │                                   │                                   │
+  ├─────── TCP / WSS Connect ────────►│                                   │
+  │                                   │ Generate 32-byte Hex Challenge    │
+  │◄────── AUTH_CHALLENGE ────────────┤                                   │
+  │                                   │                                   │
+  │ Sign Challenge using RSA Private  │                                   │
+  ├─────── AUTH_RESPONSE ────────────►│                                   │
+  │        (cloudId + Signature)      ├────── Query Agent Public Key ────►│
+  │                                   │◄───── Return Public Key ──────────┤
+  │                                   │ Verify SHA256 Signature           │
+  │                                   ├────── Update Status=ONLINE ──────►│
+  │◄────── AUTH_OK ───────────────────┤                                   │
+  │                                   │ Register in Map&lt;cloudId, WS&gt;      │
+      </pre>
+
+      <h3>Heartbeat Mechanism</h3>
+      <p>The Gateway runs a 30-second heartbeat loop (<code>heartbeat.ts</code>). If an agent fails to respond to pings for 65 seconds (>2 missed pings), the Gateway terminates the socket connection, unregisters it from memory, updates PostgreSQL <code>status = "OFFLINE"</code>, and publishes an <code>AGENT_OFFLINE</code> event trigger to email the owner.</p>
+    </section>
+
+    <!-- SECTION 11 -->
+    <section id="sec-11">
+      <h2>11. External Integrations</h2>
+      
+      <h3>1. Brevo SMTP Email Relay</h3>
+      <ul>
+        <li><strong>Purpose:</strong> Sending 6-digit signup verification OTPs and storage quota alerts.</li>
+        <li><strong>SDK / Protocol:</strong> Nodemailer using standard SMTP (<code>smtp-relay.brevo.com:587</code>).</li>
+        <li><strong>Fallback Handling:</strong> Log errors to console; signup requires valid email verification.</li>
+      </ul>
+
+      <h3>2. Google OAuth 2.0</h3>
+      <ul>
+        <li><strong>Purpose:</strong> One-click social authentication.</li>
+        <li><strong>SDK:</strong> Passport.js with <code>passport-google-oauth20</code> strategy.</li>
+        <li><strong>Flow:</strong> Redirects to Google consent screen → Google callback to <code>/auth/google/callback</code> → API verifies profile, creates/fetches user, issues HTTP-only JWT cookies.</li>
+      </ul>
+
+      <h3>3. Non-Existent Systems <span class="tag-not-found">(NOT FOUND)</span></h3>
+      <p>This project does <strong>NOT</strong> implement Stripe/PayPal payments, AWS S3 object storage, or external SMS gateways.</p>
+    </section>
+
+    <!-- SECTION 12 -->
+    <section id="sec-12">
+      <h2>12. Authentication & Security</h2>
+      <table>
+        <thead>
+          <tr><th>Mechanism</th><th>Implementation Details</th><th>Security Threat Prevented</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Password Hashing</td>
+            <td>Argon2id via <code>argon2</code> npm module</td>
+            <td>Rainbow table attacks, GPU brute-forcing</td>
+          </tr>
+          <tr>
+            <td>JWT Auth Cookies</td>
+            <td>Dual HttpOnly, Secure, SameSite cookies (<code>cb_access</code> 15m, <code>cb_refresh</code> 7d)</td>
+            <td>XSS token theft, session hijacking</td>
+          </tr>
+          <tr>
+            <td>Agent Auth</td>
+            <td>RSA-2048 Digital Signatures (SHA256) over random challenge string</td>
+            <td>Man-in-the-Middle, Agent spoofing</td>
+          </tr>
+          <tr>
+            <td>Two-Factor Auth (2FA)</td>
+            <td>TOTP (RFC 6238) via <code>otplib</code> and QR code generation via <code>qrcode</code></td>
+            <td>Credential stuffing, password leaks</td>
+          </tr>
+          <tr>
+            <td>Security Headers</td>
+            <td>Helmet.js (HSTS, Content Security Policy, Frameguard)</td>
+            <td>Clickjacking, MIME sniffing, XSS</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SECTION 13 -->
+    <section id="sec-13">
+      <h2>13. Frontend Architecture</h2>
+      <ul>
+        <li><strong>Framework:</strong> Next.js 16 (App Router, Turbopack enabled) using React 19 and TypeScript.</li>
+        <li><strong>Styling:</strong> Tailwind CSS v4 with custom dark mode glassmorphism UI elements.</li>
+        <li><strong>State Management:</strong>
+          <ul>
+            <li><strong>Zustand:</strong> Global client-side UI states (active modal states, sidebar states, current workspace).</li>
+            <li><strong>React Query (TanStack Query v5):</strong> Server-state fetching, automatic background revalidation, optimistic cache updates.</li>
+          </ul>
+        </li>
+        <li><strong>Data Fetching & Auth:</strong> Native <code>fetch</code> wrappers automatically sending <code>credentials: "include"</code> to handle HTTP-only authentication cookies seamless across client components.</li>
+      </ul>
+    </section>
+
+    <!-- SECTION 14 -->
+    <section id="sec-14">
+      <h2>14. Tech Stack</h2>
+      <table>
+        <thead>
+          <tr><th>Technology</th><th>Category</th><th>Where Used</th><th>Why Used</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Next.js 16 / React 19</td><td>Frontend Framework</td><td><code>apps/web</code></td><td>Server-Side Rendering, fast routing, modern React features.</td></tr>
+          <tr><td>Express.js</td><td>Backend Framework</td><td><code>apps/api</code></td><td>Battle-tested REST routing, simple middleware composition.</td></tr>
+          <tr><td>ws (WebSocket)</td><td>Real-Time Gateway</td><td><code>apps/gateway</code></td><td>Low-overhead native Node.js WebSocket protocol handler.</td></tr>
+          <tr><td>Prisma</td><td>Database ORM</td><td><code>apps/api</code>, <code>apps/gateway</code></td><td>Type-safe database queries, automated migration management.</td></tr>
+          <tr><td>PostgreSQL 16</td><td>Relational Database</td><td>Docker Infrastructure</td><td>ACID compliance, relational directory tree representation.</td></tr>
+          <tr><td>Redis 7</td><td>Cache / PubSub</td><td>Docker Infrastructure</td><td>Ultra-fast inter-service message bus and TTL storage.</td></tr>
+          <tr><td>Chokidar</td><td>FS Watcher</td><td><code>apps/agent</code></td><td>Cross-platform file system event monitoring.</td></tr>
+          <tr><td>Docker / Compose</td><td>Containerization</td><td>Root / Deployment</td><td>Unified multi-container orchestration across environments.</td></tr>
+          <tr><td>Nginx</td><td>Reverse Proxy</td><td>Deployment</td><td>SSL termination, subdomain routing, HTTP/WSS proxying.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SECTION 15 -->
+    <section id="sec-15">
+      <h2>15. Why This Technology?</h2>
+      
+      <h3>PostgreSQL vs MongoDB</h3>
+      <p><strong>Decision:</strong> PostgreSQL was chosen. <span class="tag-verified">(VERIFIED FROM CODE)</span></p>
+      <p><strong>Reason:</strong> CloudBox file hierarchies rely heavily on relational constraints (foreign keys for <code>parentId</code>, <code>userId</code>, <code>agentId</code>) and transactional integrity when updating storage quotas (<code>usedBytes</code>). MongoDB lacks enforcement of strict foreign key referential integrity required for safe cascading file deletions.</p>
+
+      <h3>Redis Pub/Sub vs RabbitMQ / Kafka</h3>
+      <p><strong>Decision:</strong> Redis Pub/Sub was chosen. <span class="tag-inference">(INFERENCE)</span></p>
+      <p><strong>Reason:</strong> CloudBox requires low-latency ephemeral RPC message routing between the API and Gateway to forward live base64 file chunks. Heavy persistent message queuing (like Kafka or RabbitMQ) introduces unnecessary operational overhead, whereas Redis provides instant pub/sub primitives alongside key-value TTL storage for claim codes and OTPs.</p>
+    </section>
+
+    <!-- SECTION 16 -->
+    <section id="sec-16">
+      <h2>16. Docker & Containerization</h2>
+      <p>The system is orchestrated via <code>docker-compose.yml</code> defining 5 main services (PostgreSQL, Redis, API, Gateway, Web) and 4 observability services (Prometheus, Loki, Promtail, Grafana under profile <code>observability</code>).</p>
+      
+      <h4>Startup Sequence (<code>docker compose up</code>):</h4>
+      <ol>
+        <li>PostgreSQL & Redis start first with healthchecks (<code>pg_isready</code> and <code>redis-cli ping</code> interval 5s).</li>
+        <li>API container builds from root context (multistage Dockerfile), waits for Postgres & Redis healthchecks to pass, runs Prisma migrations, and binds port 4000.</li>
+        <li>Gateway container builds, connects to Redis, executes startup cleanup (resets stale <code>ONLINE</code> agents to <code>OFFLINE</code>), and binds port 4001.</li>
+        <li>Web container builds Next.js production bundle and binds port 3000.</li>
+      </ol>
+    </section>
+
+    <!-- SECTION 17 -->
+    <section id="sec-17">
+      <h2>17. Deployment Architecture</h2>
+      <p>Configured for single-node deployment on an <strong>AWS EC2 t3.micro instance (2 vCPUs, 1 GB RAM, 20 GB GP3 SSD)</strong> running <strong>Ubuntu 24.04 LTS</strong> behind GoDaddy DNS and Nginx with free Let's Encrypt SSL certificates.</p>
+      <pre>
+Internet Requests
+  │
+  ▼
+GoDaddy DNS Records (cloudboxes.com, www.cloudboxes.com, gateway.cloudboxes.com)
+  │
+  ▼
+AWS Elastic Public IP (54.x.x.x)
+  │
+  ▼
+AWS Security Group (Ports 22, 80, 443 open)
+  │
+  ▼
+Nginx Reverse Proxy (Certbot Let's Encrypt SSL)
+  ├── cloudboxes.com          ──► Proxy Pass http://127.0.0.1:3000 (Web Container)
+  ├── cloudboxes.com/api/*    ──► Proxy Pass http://127.0.0.1:4000 (API Container)
+  └── gateway.cloudboxes.com  ──► Proxy Pass http://127.0.0.1:4001 (Gateway WebSocket)
+      </pre>
+    </section>
+
+    <!-- SECTION 18 -->
+    <section id="sec-18">
+      <h2>18. Development vs Production</h2>
+      <table>
+        <thead>
+          <tr><th>Feature</th><th>Development</th><th>Production</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Execution Tool</td><td><code>tsx watch</code> (Hot-reloading TS)</td><td>Compiled JavaScript (<code>node dist/index.js</code>)</td></tr>
+          <tr><td>Frontend Bundler</td><td>Next.js Turbopack dev server</td><td>Optimized Next.js Standalone Build</td></tr>
+          <tr><td>Database Connection</td><td>Localhost <code>localhost:5432</code></td><td>Docker network bridge <code>postgres:5432</code></td></tr>
+          <tr><td>Cookies Policy</td><td><code>Secure: false</code>, <code>SameSite: "lax"</code></td><td><code>Secure: true</code>, <code>SameSite: "none"</code></td></tr>
+          <tr><td>Proxy / SSL</td><td>Direct HTTP access to ports</td><td>Nginx Reverse Proxy with HTTPS / WSS</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SECTION 19 -->
+    <section id="sec-19">
+      <h2>19. Scalability Analysis</h2>
+      <ul>
+        <li><strong>Current Bottlenecks:</strong> 
+          <ol>
+            <li>Memory footprint of base64 chunking during large file transfers.</li>
+            <li>Gateway WebSocket registry is stored in local Node.js process memory (<code>Map&lt;cloudId, WebSocket&gt;</code>), preventing multi-instance Gateway horizontal load balancing without sticky sessions.</li>
+          </ol>
+        </li>
+        <li><strong>Horizontal Scaling Plan:</strong> Replace local Gateway memory registry with a Redis-backed WebSocket connection lookup table or sticky routing on Nginx based on <code>cloudId</code> header.</li>
+      </ul>
+    </section>
+
+    <!-- SECTION 20 -->
+    <section id="sec-20">
+      <h2>20. Failure Scenarios</h2>
+      <table>
+        <thead>
+          <tr><th>Failure Event</th><th>Current System Behavior</th><th>Data Impact</th><th>System Recovery</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Agent Disconnects / Crashes</td>
+            <td>Gateway heartbeat times out after 65s, sets status <code>OFFLINE</code>, triggers email notification.</td>
+            <td>Zero data loss. Local files remain intact on agent disk.</td>
+            <td>Agent CLI auto-reconnects with exponential backoff (1s to 30s) and triggers full sync upon auth.</td>
+          </tr>
+          <tr>
+            <td>API Gateway Crash Mid-Upload</td>
+            <td>Browser upload fails with HTTP error. Agent stream times out and deletes partial buffer.</td>
+            <td>Partial upload abandoned; database state unchanged.</td>
+            <td>Docker restart policy (<code>unless-stopped</code>) restores container in seconds. User retries upload.</td>
+          </tr>
+          <tr>
+            <td>Gateway Server Reboot</td>
+            <td>On startup, Gateway runs database query resetting all <code>ONLINE</code> agents to <code>OFFLINE</code>.</td>
+            <td>Prevents stale database status locks.</td>
+            <td>Agents reconnect automatically via WSS within 30 seconds.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SECTION 21 -->
+    <section id="sec-21">
+      <h2>21. Tradeoffs & Architectural Weaknesses</h2>
+      <table>
+        <thead>
+          <tr><th>Architectural Decision</th><th>Benefit</th><th>Drawback / Weakness</th><th>Production Fix</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Base64 Chunk Encoding over WS</td>
+            <td>Easy JSON serialization over standard WebSockets.</td>
+            <td>33% bandwidth overhead compared to binary array buffers.</td>
+            <td>Adopt raw binary WebSocket frames (ArrayBuffers).</td>
+          </tr>
+          <tr>
+            <td>In-Memory EventEmitter Waiter</td>
+            <td>Simple async code structure for HTTP chunk waiting.</td>
+            <td>Memory usage spikes under high concurrent downloads.</td>
+            <td>Stream chunks directly to HTTP response pipe.</td>
+          </tr>
+          <tr>
+            <td>Single Gateway Instance</td>
+            <td>No complex inter-gateway socket lookup needed.</td>
+            <td>Single Point of Failure (SPOF) for WebSockets.</td>
+            <td>Deploy Redis Adapter for multi-gateway socket routing.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SECTION 22 -->
+    <section id="sec-22">
+      <h2>22. "Why Not X?" Interview Questions</h2>
+      
+      <h3>Why not store files on AWS S3 directly?</h3>
+      <p><em>Answer:</em> CloudBox is designed specifically to eliminate third-party cloud storage fees and privacy concerns by allowing users to leverage their existing local hardware (NAS, desktop hard drives) while enjoying cloud-like web access.</p>
+
+      <h3>Why use a separate Gateway service instead of handling WebSockets in Express?</h3>
+      <p><em>Answer:</em> Separating the Gateway decouples long-lived persistent TCP WebSocket state management from the stateless HTTP REST API. This allows the Express API to scale horizontally without severing active agent connections.</p>
+    </section>
+
+    <!-- SECTION 23 -->
+    <section id="sec-23">
+      <h2>23. Technical Interview Q&A</h2>
+      
+      <h3>Q: How do you prevent an unauthorized device from registering as a user's storage node?</h3>
+      <p><em>Answer:</em> Registration requires a 2-step process. First, an authenticated user generates a short-lived (10-min TTL) 6-character claim code stored in Redis. The remote device submits this code along with a generated 2048-bit RSA public key. Furthermore, every subsequent WebSocket connection requires the agent to sign a random 32-byte cryptographic challenge string using its RSA private key, verified against the public key saved during registration.</p>
+
+      <h3>Q: How does the system handle file synchronization when a file is modified locally on the Agent machine?</h3>
+      <p><em>Answer:</em> The Agent uses <code>chokidar</code> to monitor file system events in <code>~/.cloudbox/storage</code>. When a change occurs, it debounces for 1 second, scans the directory, and sends a <code>METADATA_SYNC</code> payload over the WebSocket. The API's <code>GatewaySubscriber</code> receives this via Redis and executes a 2-pass reconciliation algorithm that updates timestamps, recalculates parent folder IDs, and updates database metadata automatically.</p>
+    </section>
+
+    <!-- SECTION 24 -->
+    <section id="sec-24">
+      <h2>24. Important Code Snippets</h2>
+      
+      <h3>1. Gateway Cryptographic Handshake (<code>apps/gateway/src/auth.ts</code>)</h3>
+      <pre><code>export async function runAuthHandshake(ws: WebSocket): Promise&lt;string | null&gt; {
+  const challenge = randomBytes(32).toString("hex");
+  send(ws, { type: "AUTH_CHALLENGE", challenge });
+
+  // Wait for AUTH_RESPONSE from agent
+  const handler = async (raw: Buffer | string) => {
+    const msg = JSON.parse(raw.toString());
+    if (msg.type !== "AUTH_RESPONSE") return;
+
+    const { cloudId, signature } = msg;
+    const agent = await prisma.agent.findUnique({ where: { cloudId } });
+    if (!agent) return resolve(null);
+
+    const verify = createVerify("SHA256");
+    verify.update(challenge);
+    const isValid = verify.verify(agent.publicKey, signature, "base64");
+
+    if (!isValid) return resolve(null);
+    await prisma.agent.update({ where: { cloudId }, data: { status: "ONLINE" } });
+    registerSocket(cloudId, agent.id, ws);
+    resolve(cloudId);
+  };
+  ws.on("message", handler);
+}</code></pre>
+
+      <h3>2. Async Request Waiter (<code>apps/api/src/lib/requestRegistry.ts</code>)</h3>
+      <pre><code>class RequestRegistry extends EventEmitter {
+  waitFor&lt;T&gt;(requestId: string, timeoutMs = 30_000): Promise&lt;T&gt; {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.off(requestId, handler);
+        reject(new Error(`Request timed out: ${requestId}`));
+      }, timeoutMs);
+
+      const handler = (data: T) => {
+        clearTimeout(timer);
+        resolve(data);
+      };
+      this.once(requestId, handler);
+    });
+  }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 25 -->
+    <section id="sec-25">
+      <h2>25. Complete End-to-End Scenario</h2>
+      <h3>Scenario: User downloads a 10MB video file</h3>
+      <ol>
+        <li>User clicks "Download" in Next.js web dashboard. Browser issues <code>GET /api/files/download/:id</code> with HTTP-only cookie.</li>
+        <li>Express <code>filesRouter</code> authenticates JWT payload, checks file existence and user permissions in PostgreSQL.</li>
+        <li>API checks agent status. If <code>lastHeartbeat</code> &gt; 2 mins ago, rejects with 503 node offline.</li>
+        <li>API generates UUID <code>requestId</code>, sets response headers (<code>Content-Disposition</code>, <code>Content-Type</code>), and publishes <code>DOWNLOAD_FILE</code> command to Redis channel <code>gateway:commands</code>.</li>
+        <li>Gateway subscriber routes command over active WebSocket to target Agent.</li>
+        <li>Agent receives command, opens <code>fs.createReadStream</code> with 64KB chunk size. Iterates over stream, base64 encodes each chunk, and sends <code>FILE_CHUNK</code> WebSocket messages to Gateway.</li>
+        <li>Gateway publishes each chunk to Redis channel <code>gateway:responses</code>.</li>
+        <li>API <code>GatewaySubscriber</code> receives chunk and emits to <code>requestRegistry</code> using <code>requestId</code>.</li>
+        <li>API download route handler receives chunk, decodes base64 back to binary Buffer, and writes to Express response stream (<code>res.write(buffer)</code>).</li>
+        <li>Agent sends final chunk (<code>final: true</code>). API closes HTTP response stream (<code>res.end()</code>). Browser completes download.</li>
+      </ol>
+    </section>
+
+    <!-- SECTION 26 -->
+    <section id="sec-26">
+      <h2>26. Final Cheat Sheet</h2>
+      
+      <h3>Default Component Ports</h3>
+      <table>
+        <thead>
+          <tr><th>Component</th><th>Port</th><th>Protocol</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Next.js Web Frontend</td><td><code>3000</code></td><td>HTTP</td></tr>
+          <tr><td>Express API Backend</td><td><code>4000</code></td><td>HTTP</td></tr>
+          <tr><td>WebSocket Gateway</td><td><code>4001</code></td><td>HTTP / WS</td></tr>
+          <tr><td>PostgreSQL Database</td><td><code>5432</code></td><td>TCP SQL</td></tr>
+          <tr><td>Redis Cache / PubSub</td><td><code>6379</code></td><td>TCP Redis</td></tr>
+          <tr><td>Prometheus Metrics</td><td><code>9090</code></td><td>HTTP</td></tr>
+          <tr><td>Grafana Monitoring</td><td><code>3001</code></td><td>HTTP</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Key Environment Variables</h3>
+      <ul>
+        <li><code>DATABASE_URL</code>: PostgreSQL connection string.</li>
+        <li><code>REDIS_URL</code>: Redis connection URL.</li>
+        <li><code>JWT_SECRET</code> / <code>JWT_REFRESH_SECRET</code>: HMAC keys for token signing.</li>
+        <li><code>SMTP_HOST</code> / <code>SMTP_USER</code> / <code>SMTP_PASS</code>: Brevo email credentials.</li>
+      </ul>
+    </section>
+
+    <!-- SECTION 27 -->
+    <section id="sec-27">
+      <h2>27. Final "Explain This Project in 2 Minutes"</h2>
+      
+      <h3>30-Second Pitch</h3>
+      <p>"CloudBox is a self-hosted personal cloud storage platform that connects your own computer's hard drive to a web dashboard. It uses a Next.js 16 frontend, an Express REST API, a PostgreSQL database, and a custom Node.js CLI agent. Devices authenticate with 2048-bit RSA key signatures and connect to a WebSocket Gateway. Files are streamed in 64KB chunks through a Redis pub/sub backbone, allowing you to access files stored on your home PC from anywhere in the world without port forwarding."</p>
+
+      <h3>2-Minute Interview Pitch</h3>
+      <p>"CloudBox is a full-stack, distributed personal cloud storage ecosystem engineered as a TypeScript monorepo using Next.js 16, Express, PostgreSQL, Prisma, and Redis. The core problem it solves is allowing privacy-focused users to turn their local storage devices—like a home PC or Raspberry Pi—into a private cloud accessible through a web browser without complex network configurations like static IPs or port forwarding.</p>
+      <p>Architecturally, it consists of three primary application layers: a modern React 19 web interface, a stateless Express API backend, and a real-time WebSocket Gateway. Users run a lightweight Node.js CLI Agent on their local storage device. To register a node, the agent generates an RSA-2048 keypair and claims a 6-character code managed in Redis. When the agent connects to the Gateway over WebSocket, the server verifies a cryptographic challenge signature before marking the device online.</p>
+      <p>When a user uploads a file, the API processes incoming HTTP multipart streams via Busboy, breaks the file into 64KB base64 chunks, and publishes commands over Redis Pub/Sub. The Gateway relays these chunks down the WebSocket tunnel to the Agent, which writes them directly to disk. The Agent continuously monitors disk changes with Chokidar and executes a two-pass tree reconciliation algorithm to sync directory metadata back to PostgreSQL. The whole platform is containerized with Docker Compose and deployed on AWS EC2 behind Nginx with Let's Encrypt SSL."</p>
+    </section>
+  </main>
+</div>
+
+</body>
+</html>
