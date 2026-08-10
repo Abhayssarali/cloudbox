@@ -40,7 +40,11 @@ COPY --from=builder /app/apps/gateway/package.json ./apps/gateway/package.json
 COPY --from=builder /app/packages/shared-types/package.json ./packages/shared-types/package.json
 COPY --from=builder /app/apps/gateway/dist ./apps/gateway/dist
 COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
+# Copy Prisma schema so gateway can run db push on startup (handles race with API)
+COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
+COPY --from=builder /app/apps/api/package.json ./apps/api/package.json
+COPY --from=builder /app/apps/api/node_modules ./apps/api/node_modules
 
 EXPOSE 4001
 
-CMD ["node", "apps/gateway/dist/index.js"]
+CMD ["sh", "-c", "npx prisma db push --schema=apps/api/prisma/schema.prisma --skip-generate && node apps/gateway/dist/index.js"]
