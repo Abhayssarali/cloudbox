@@ -39,4 +39,4 @@ COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
 
 EXPOSE 4000
 
-CMD ["sh", "-c", "./node_modules/.bin/prisma db push --schema=apps/api/prisma/schema.prisma --skip-generate && node apps/api/dist/index.js"]
+CMD ["sh", "-c", "npx prisma@5.17.0 db push --schema=apps/api/prisma/schema.prisma --skip-generate && node apps/api/dist/index.js"]
