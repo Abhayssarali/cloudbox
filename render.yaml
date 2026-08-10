@@ -11,7 +11,7 @@ services:
     dockerfilePath: ./apps/api/Dockerfile
     dockerContext: .
     region: oregon
-    plan: starter
+    plan: free
     envVars:
       - key: PORT
         value: 4000
@@ -53,7 +53,7 @@ services:
     dockerfilePath: ./apps/gateway/Dockerfile
     dockerContext: .
     region: oregon
-    plan: starter
+    plan: free
     envVars:
       - key: GATEWAY_PORT
         value: 4001
@@ -76,7 +76,7 @@ services:
     dockerfilePath: ./apps/web/Dockerfile
     dockerContext: .
     region: oregon
-    plan: starter
+    plan: free
     envVars:
       - key: NODE_ENV
         value: production
@@ -90,7 +90,7 @@ services:
   - type: redis
     name: cloudbox-redis
     region: oregon
-    plan: starter
+    plan: free
     maxmemoryPolicy: noeviction
     ipAllowList: []
 
@@ -100,4 +100,4 @@ databases:
     databaseName: cloudbox_db
     user: cloudbox
     region: oregon
-    plan: starter
+    plan: free
