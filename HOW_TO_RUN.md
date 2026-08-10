@@ -54,7 +54,7 @@ pnpm dev
 ## 6. Start the Agent
 To start your storage node Agent, open a new terminal and run:
 ```bash
-pnpm --filter agent run dev start
+pnpm --filter cloudbox-agent run dev start
 ```
 *(On first run, this connects to the Gateway, performs authentication, and creates your local storage folder at `~/.cloudbox/storage`)*
 
