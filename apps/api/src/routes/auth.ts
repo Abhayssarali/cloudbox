@@ -9,6 +9,8 @@ import { passport } from "../lib/passport.js";
 import { setAuthCookies, clearAuthCookies, verifyRefreshToken, signAccessToken } from "../lib/jwt.js";
 import { requireAuth } from "../middleware/auth.js";
 import { logActivity } from "../lib/activityLog.js";
+import { generateOtp, storeOtp, verifyOtp, invalidateOtp } from "../lib/emailOtp.js";
+import { sendOtpEmail } from "../lib/mailer.js";
 import type { IRouter } from "express";
 
 
@@ -82,6 +84,7 @@ authRouter.post("/signup", async (req, res) => {
         email,
         passwordHash,
         role: "ADMIN",
+        emailVerified: false,
         ownedGroups: {
           create: {
             name: workspaceName,
@@ -101,14 +104,19 @@ authRouter.post("/signup", async (req, res) => {
       data: { groupId: group.id },
     });
 
-    setAuthCookies(res, user.id, user.role);
+    // Send email verification OTP instead of auto-login
+    const otp = generateOtp();
+    await storeOtp(user.id, otp);
+    await sendOtpEmail(email, otp);
+
     await logActivity("SIGNUP", { userId: user.id, meta: { email: user.email, type: "create_workspace", workspace: workspaceName } });
 
     res.status(201).json({
       success: true,
       data: {
-        user: { id: user.id, email: user.email, role: user.role },
-        workspace: { id: group.id, name: group.name, inviteCode: group.inviteCode },
+        requiresVerification: true,
+        userId: user.id,
+        email: user.email,
       },
     });
     return;
@@ -123,18 +131,23 @@ authRouter.post("/signup", async (req, res) => {
     }
 
     const user = await prisma.user.create({
-      data: { email, passwordHash, role: "USER", groupId: group.id },
+      data: { email, passwordHash, role: "USER", groupId: group.id, emailVerified: false },
       select: { id: true, email: true, role: true },
     });
 
-    setAuthCookies(res, user.id, user.role);
+    // Send email verification OTP instead of auto-login
+    const otp = generateOtp();
+    await storeOtp(user.id, otp);
+    await sendOtpEmail(email, otp);
+
     await logActivity("SIGNUP", { userId: user.id, meta: { email: user.email, type: "join_workspace", workspace: group.name } });
 
     res.status(201).json({
       success: true,
       data: {
-        user: { id: user.id, email: user.email, role: user.role },
-        workspace: { id: group.id, name: group.name },
+        requiresVerification: true,
+        userId: user.id,
+        email: user.email,
       },
     });
     return;
@@ -166,6 +179,21 @@ authRouter.post("/login", async (req, res) => {
   const valid = await argon2.verify(user.passwordHash, password);
   if (!valid) {
     res.status(401).json({ success: false, error: "Invalid credentials" });
+    return;
+  }
+
+  // Block login if email not verified — offer to resend OTP
+  if (!user.emailVerified) {
+    // Send a fresh OTP so the user can verify
+    const otp = generateOtp();
+    await storeOtp(user.id, otp);
+    await sendOtpEmail(user.email, otp);
+
+    res.status(403).json({
+      success: false,
+      error: "Please verify your email before logging in. A new code has been sent.",
+      data: { requiresVerification: true, userId: user.id, email: user.email },
+    });
     return;
   }
 
@@ -239,6 +267,91 @@ authRouter.post("/login/totp", async (req, res) => {
   }
 });
 
+
+// ---- POST /auth/verify-email ----
+// Validate the 6-digit OTP sent during signup to mark the user's email as verified.
+
+authRouter.post("/verify-email", async (req, res) => {
+  const { userId, code } = req.body as { userId?: string; code?: string };
+
+  if (!userId || !code) {
+    res.status(400).json({ success: false, error: "userId and code are required" });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, role: true, emailVerified: true },
+  });
+
+  if (!user) {
+    res.status(404).json({ success: false, error: "User not found" });
+    return;
+  }
+
+  if (user.emailVerified) {
+    res.json({ success: true, data: { alreadyVerified: true } });
+    return;
+  }
+
+  const valid = await verifyOtp(userId, code);
+  if (!valid) {
+    res.status(401).json({ success: false, error: "Invalid or expired code. Please request a new one." });
+    return;
+  }
+
+  // Mark email as verified
+  await prisma.user.update({
+    where: { id: userId },
+    data: { emailVerified: true },
+  });
+
+  // Auto-login after verification
+  setAuthCookies(res, user.id, user.role as "SUPER_ADMIN" | "ADMIN" | "USER");
+  await logActivity("EMAIL_VERIFIED", { userId: user.id, meta: { email: user.email } });
+
+  res.json({
+    success: true,
+    data: {
+      user: { id: user.id, email: user.email, role: user.role },
+    },
+  });
+});
+
+// ---- POST /auth/resend-otp ----
+// Regenerate and resend the email verification OTP.
+
+authRouter.post("/resend-otp", async (req, res) => {
+  const { userId } = req.body as { userId?: string };
+
+  if (!userId) {
+    res.status(400).json({ success: false, error: "userId is required" });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, emailVerified: true },
+  });
+
+  if (!user) {
+    res.status(404).json({ success: false, error: "User not found" });
+    return;
+  }
+
+  if (user.emailVerified) {
+    res.json({ success: true, data: { alreadyVerified: true } });
+    return;
+  }
+
+  // Invalidate any existing OTP and generate a new one
+  await invalidateOtp(userId);
+  const otp = generateOtp();
+  await storeOtp(userId, otp);
+  await sendOtpEmail(user.email, otp);
+
+  res.json({ success: true, data: { message: "A new verification code has been sent to your email." } });
+});
 
 // ---- POST /auth/logout ----
 

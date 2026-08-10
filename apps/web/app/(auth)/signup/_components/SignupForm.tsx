@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useId } from "react";
+import { useState, useId, useRef, useEffect, useCallback } from "react";
 import { useAuthStore } from "@/stores/useAuthStore";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 type Mode = "choose" | "join" | "create";
+type Step = "form" | "verify";
 
 interface FormErrors {
   email?: string;
@@ -25,6 +26,7 @@ export default function SignupForm() {
   const setUser = useAuthStore((s: import("@/stores/useAuthStore").AuthState) => s.setUser);
 
   const [mode, setMode] = useState<Mode>("choose");
+  const [step, setStep] = useState<Step>("form");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -33,6 +35,22 @@ export default function SignupForm() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [isLoading, setIsLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
+
+  // OTP verification state
+  const [pendingUserId, setPendingUserId] = useState("");
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""]);
+  const [otpError, setOtpError] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // Resend cooldown timer
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
 
   function validate(): FormErrors {
     const errs: FormErrors = {};
@@ -70,7 +88,10 @@ export default function SignupForm() {
         success: boolean;
         error?: string;
         data?: {
-          user: { id: string; email: string; role: "SUPER_ADMIN" | "ADMIN" | "USER" };
+          requiresVerification?: boolean;
+          userId?: string;
+          email?: string;
+          user?: { id: string; email: string; role: "SUPER_ADMIN" | "ADMIN" | "USER" };
           workspace?: { id: string; name: string; inviteCode?: string };
         };
       };
@@ -80,6 +101,16 @@ export default function SignupForm() {
         return;
       }
 
+      // Check if email verification is required
+      if (data.data?.requiresVerification && data.data.userId) {
+        setPendingUserId(data.data.userId);
+        setPendingEmail(data.data.email ?? email);
+        setStep("verify");
+        setResendCooldown(60);
+        return;
+      }
+
+      // Fallback: direct login (Google OAuth, etc.)
       if (data.data?.user) setUser(data.data.user);
       window.location.href = "/dashboard";
     } catch {
@@ -87,6 +118,212 @@ export default function SignupForm() {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  // ── OTP handlers ──────────────────────────────────────────────────────────
+
+  const handleOtpChange = useCallback((index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return; // only digits
+    const newDigits = [...otpDigits];
+    newDigits[index] = value.slice(-1); // only last char
+    setOtpDigits(newDigits);
+    setOtpError("");
+
+    // Auto-advance to next input
+    if (value && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  }, [otpDigits]);
+
+  const handleOtpKeyDown = useCallback((index: number, e: React.KeyboardEvent) => {
+    if (e.key === "Backspace" && !otpDigits[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    }
+  }, [otpDigits]);
+
+  const handleOtpPaste = useCallback((e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (pasted.length === 0) return;
+    const newDigits = [...otpDigits];
+    for (let i = 0; i < 6; i++) {
+      newDigits[i] = pasted[i] || "";
+    }
+    setOtpDigits(newDigits);
+    setOtpError("");
+    // Focus last filled input
+    const lastIndex = Math.min(pasted.length, 6) - 1;
+    inputRefs.current[lastIndex]?.focus();
+  }, [otpDigits]);
+
+  async function handleVerify() {
+    const code = otpDigits.join("");
+    if (code.length !== 6) {
+      setOtpError("Please enter all 6 digits");
+      return;
+    }
+
+    setIsVerifying(true);
+    setOtpError("");
+
+    try {
+      const res = await fetch(`${API_URL}/auth/verify-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ userId: pendingUserId, code }),
+      });
+
+      const data = await res.json() as {
+        success: boolean;
+        error?: string;
+        data?: { user?: { id: string; email: string; role: "SUPER_ADMIN" | "ADMIN" | "USER" } };
+      };
+
+      if (!res.ok || !data.success) {
+        setOtpError(data.error ?? "Verification failed. Please try again.");
+        setOtpDigits(["", "", "", "", "", ""]);
+        inputRefs.current[0]?.focus();
+        return;
+      }
+
+      if (data.data?.user) setUser(data.data.user);
+      window.location.href = "/dashboard";
+    } catch {
+      setOtpError("Network error — check your connection.");
+    } finally {
+      setIsVerifying(false);
+    }
+  }
+
+  async function handleResendOtp() {
+    if (resendCooldown > 0) return;
+    setResendCooldown(60);
+    setOtpError("");
+
+    try {
+      await fetch(`${API_URL}/auth/resend-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ userId: pendingUserId }),
+      });
+    } catch {
+      // Silently fail — cooldown will still run
+    }
+  }
+
+  // Auto-submit when all 6 digits are filled
+  useEffect(() => {
+    if (step === "verify" && otpDigits.every((d) => d !== "") && !isVerifying) {
+      handleVerify();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otpDigits, step]);
+
+  // ── OTP Verification Screen ───────────────────────────────────────────────
+  if (step === "verify") {
+    return (
+      <div className="otp-verify">
+        <div className="otp-verify__icon">✉️</div>
+        <h3 className="otp-verify__title">Check your email</h3>
+        <p className="otp-verify__subtitle">
+          We sent a 6-digit code to <strong>{pendingEmail}</strong>
+        </p>
+
+        <div className="otp-verify__inputs" onPaste={handleOtpPaste}>
+          {otpDigits.map((digit, i) => (
+            <input
+              key={i}
+              ref={(el) => { inputRefs.current[i] = el; }}
+              type="text"
+              inputMode="numeric"
+              maxLength={1}
+              value={digit}
+              onChange={(e) => handleOtpChange(i, e.target.value)}
+              onKeyDown={(e) => handleOtpKeyDown(i, e)}
+              className={`otp-verify__digit ${otpError ? "otp-verify__digit--error" : ""}`}
+              disabled={isVerifying}
+              autoFocus={i === 0}
+              aria-label={`Digit ${i + 1}`}
+            />
+          ))}
+        </div>
+
+        {otpError && (
+          <div className="otp-verify__error" role="alert">
+            <svg viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" /></svg>
+            {otpError}
+          </div>
+        )}
+
+        {isVerifying && (
+          <div className="otp-verify__verifying">
+            <span className="sf__spinner" aria-hidden="true" /> Verifying…
+          </div>
+        )}
+
+        <button
+          type="button"
+          className="otp-verify__verify-btn"
+          onClick={handleVerify}
+          disabled={isVerifying || otpDigits.some((d) => !d)}
+        >
+          {isVerifying ? (
+            <><span className="sf__spinner" aria-hidden="true" /> Verifying…</>
+          ) : (
+            "Verify email"
+          )}
+        </button>
+
+        <div className="otp-verify__resend">
+          <span className="otp-verify__resend-text">Didn&apos;t receive the code?</span>
+          {resendCooldown > 0 ? (
+            <span className="otp-verify__cooldown">Resend in {resendCooldown}s</span>
+          ) : (
+            <button type="button" className="otp-verify__resend-btn" onClick={handleResendOtp}>
+              Resend code
+            </button>
+          )}
+        </div>
+
+        <button
+          type="button"
+          className="otp-verify__back"
+          onClick={() => { setStep("form"); setOtpDigits(["", "", "", "", "", ""]); setOtpError(""); }}
+        >
+          ← Back to signup
+        </button>
+
+        <style>{`
+          .otp-verify { display: flex; flex-direction: column; align-items: center; gap: 1rem; text-align: center; }
+          .otp-verify__icon { font-size: 3rem; margin-bottom: .25rem; animation: otpBounce .6s ease; }
+          @keyframes otpBounce { 0% { transform: scale(0.5); opacity: 0; } 50% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
+          .otp-verify__title { font-size: 1.375rem; font-weight: 700; color: var(--cb-text); margin: 0; }
+          .otp-verify__subtitle { font-size: .9375rem; color: var(--cb-text-muted); margin: 0; line-height: 1.5; }
+          .otp-verify__subtitle strong { color: var(--cb-text); font-weight: 600; }
+          .otp-verify__inputs { display: flex; gap: .5rem; margin: .75rem 0; }
+          .otp-verify__digit { width: 3rem; height: 3.5rem; text-align: center; font-size: 1.5rem; font-weight: 700; font-family: 'Courier New', monospace; color: var(--cb-text); background: var(--cb-surface-2); border: 1.5px solid var(--cb-border); border-radius: 10px; outline: none; transition: border-color .15s, box-shadow .15s; caret-color: var(--cb-primary); }
+          .otp-verify__digit:focus { border-color: var(--cb-primary); box-shadow: 0 0 0 3px var(--cb-primary-glow); }
+          .otp-verify__digit--error { border-color: #f43f5e; box-shadow: 0 0 0 3px rgba(244,63,94,.15); animation: otpShake .4s ease; }
+          @keyframes otpShake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+          .otp-verify__digit:disabled { opacity: .6; cursor: not-allowed; }
+          .otp-verify__error { display: flex; align-items: center; gap: .375rem; padding: .5rem .75rem; background: rgba(244,63,94,.12); border: 1px solid rgba(244,63,94,.3); border-radius: 8px; color: #fb7185; font-size: .8125rem; width: 100%; }
+          .otp-verify__error svg { width: .875rem; height: .875rem; flex-shrink: 0; }
+          .otp-verify__verifying { display: flex; align-items: center; gap: .5rem; color: var(--cb-text-muted); font-size: .875rem; }
+          .otp-verify__verify-btn { width: 100%; padding: .8125rem 1rem; background: linear-gradient(135deg, var(--cb-primary) 0%, #4f46e5 100%); color: white; font-size: .9375rem; font-weight: 600; font-family: inherit; border: none; border-radius: 10px; cursor: pointer; transition: opacity .15s, transform .1s, box-shadow .15s; box-shadow: 0 4px 20px var(--cb-primary-glow); display: flex; align-items: center; justify-content: center; gap: .5rem; }
+          .otp-verify__verify-btn:hover:not(:disabled) { opacity: .92; transform: translateY(-1px); }
+          .otp-verify__verify-btn:disabled { opacity: .7; cursor: not-allowed; }
+          .otp-verify__resend { display: flex; align-items: center; gap: .5rem; font-size: .8125rem; color: var(--cb-text-subtle); }
+          .otp-verify__cooldown { color: var(--cb-text-subtle); font-variant-numeric: tabular-nums; }
+          .otp-verify__resend-btn { background: none; border: none; color: var(--cb-primary-light); font-size: .8125rem; font-weight: 600; cursor: pointer; padding: 0; transition: color .15s; text-decoration: underline; }
+          .otp-verify__resend-btn:hover { color: var(--cb-text); }
+          .otp-verify__resend-text { color: var(--cb-text-subtle); }
+          .otp-verify__back { background: none; border: none; color: var(--cb-text-muted); font-size: .875rem; cursor: pointer; padding: .25rem 0; transition: color .15s; }
+          .otp-verify__back:hover { color: var(--cb-text); }
+        `}</style>
+      </div>
+    );
   }
 
   // ── Mode selection card ──────────────────────────────────────────────────

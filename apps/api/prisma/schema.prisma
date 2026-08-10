@@ -20,8 +20,9 @@ model User {
   usedBytes    BigInt   @default(0)
   groupId      String?
   totpSecret   String?
-  totpEnabled  Boolean  @default(false)
-  createdAt    DateTime @default(now())
+  totpEnabled     Boolean  @default(false)
+  emailVerified   Boolean  @default(false)
+  createdAt       DateTime @default(now())
   updatedAt    DateTime @updatedAt
   group        Group?   @relation(fields: [groupId], references: [id])
   agents           Agent[]       @relation("OwnedAgents")
