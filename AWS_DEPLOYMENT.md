@@ -1,13 +1,13 @@
 # CloudBox — AWS EC2 & GoDaddy Deployment Guide 🚀
 
-This guide explains how to deploy CloudBox on an **Amazon Web Services (AWS) EC2** instance using your domain **`cloudboxes.com`** (registered on GoDaddy) and **Brevo Email OTP** for signup verification.
+This guide explains how to deploy CloudBox on an **Amazon Web Services (AWS) EC2** instance using your domain **`cloudboxes.in`** (registered on GoDaddy) and **Brevo Email OTP** for signup verification.
 
 ---
 
 ## 💵 Architecture & Server Sizing
 
 * **Server:** AWS EC2 Instance (`t3.micro` - 1 GB RAM, 2 vCPUs, 20 GB SSD) running **Ubuntu 24.04 LTS**.
-* **Domain:** `cloudboxes.com` (GoDaddy DNS)
+* **Domain:** `cloudboxes.in` (GoDaddy DNS)
 * **Subdomain:** `gateway.cloudboxes.com` (for Node Agent WebSocket connection)
 * **Reverse Proxy:** Nginx with free **Let's Encrypt SSL** certificates.
 * **Database & Services:** Run via Docker Compose (`postgres`, `redis`, `api`, `gateway`, `web`).
@@ -87,8 +87,8 @@ Paste the following environment configuration into `.env`:
 
 ```env
 # Domain & Server Config
-CORS_ORIGIN=https://cloudboxes.com
-NEXT_PUBLIC_API_URL=https://cloudboxes.com
+CORS_ORIGIN=https://cloudboxes.in
+NEXT_PUBLIC_API_URL=https://cloudboxes.in
 
 # Secrets (Generate random strings for production)
 JWT_SECRET=production-super-secret-jwt-key-cloudbox-2026
@@ -98,14 +98,14 @@ SESSION_SECRET=production-super-secret-session-key-cloudbox-2026
 # Google OAuth (Optional - add from Google Cloud Console if needed)
 GOOGLE_CLIENT_ID=771896839098-01pti1o5m9dgjus0nmeckgok6fp7qec8.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=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
-GOOGLE_CALLBACK_URL=https://cloudboxes.com/auth/google/callback
+GOOGLE_CALLBACK_URL=https://cloudboxes.in/auth/google/callback
 
 # Brevo SMTP Email Verification (Configured & Ready)
 SMTP_HOST=smtp-relay.brevo.com
 SMTP_PORT=587
 SMTP_USER=86d7e6001@smtp-brevo.com
 SMTP_PASS=xsmtpsib-c7c37e57855b496e37ae3d288b002d83a1289130825fe23b9a79a123af324c8c-DuBoIQgjodUscYMG
-SMTP_FROM=CloudBox <noreply@cloudboxes.com>
+SMTP_FROM=CloudBox <noreply@cloudboxes.in>
 ```
 
 ---
@@ -183,8 +183,9 @@ SMTP_FROM=CloudBox <noreply@cloudboxes.com>
 docker compose up -d --build postgres redis api gateway web
 
 # Apply Prisma database migrations inside the API container
-docker compose exec api npx prisma db push
+docker compose exec -w /app/apps/api api npx prisma@5.17.0 db push
 ```
+*(Note: The `api` container also runs database synchronization automatically when it boots up!)*
 
 ---
 
