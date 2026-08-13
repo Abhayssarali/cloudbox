@@ -61,16 +61,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       })
       .catch(() => {});
 
-    // Check agent status
-    fetch(`${API_URL}/agents`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.success && Array.isArray(d.data?.agents)) {
-          const hasOnline = d.data.agents.some((a: { status: string }) => a.status === "ONLINE");
-          setAgentOnline(hasOnline);
-        }
-      })
-      .catch(() => {});
+    // Check agent status periodically
+    const checkAgents = () => {
+      fetch(`${API_URL}/agents`, { credentials: "include" })
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.success && Array.isArray(d.data?.agents)) {
+            const hasOnline = d.data.agents.some((a: { status: string }) => a.status === "ONLINE");
+            setAgentOnline(hasOnline);
+          } else {
+            setAgentOnline(false);
+          }
+        })
+        .catch(() => setAgentOnline(false));
+    };
+
+    checkAgents();
+    const interval = setInterval(checkAgents, 10_000);
+    return () => clearInterval(interval);
   }, [setUser, clearUser]);
 
   async function handleLogout() {

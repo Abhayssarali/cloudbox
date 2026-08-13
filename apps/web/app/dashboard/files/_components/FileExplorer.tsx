@@ -192,13 +192,14 @@ export default function FileExplorer() {
   const { data: activeNodes = [] } = useQuery({
     queryKey: ["nodes", "active"],
     queryFn: async () => {
-      const res = await fetch(`${API_URL}/agents/mine`, { credentials: "include" });
+      const res = await fetch(`${API_URL}/agents`, { credentials: "include" });
       if (!res.ok) return [];
       const json = await res.json();
       const agents = json.data?.agents ?? [];
       return agents.filter((a: any) => a.status === "ONLINE");
     },
-    enabled: !!user
+    enabled: !!user,
+    refetchInterval: 10_000,
   });
 
   const hasNodes = activeNodes.length > 0;
