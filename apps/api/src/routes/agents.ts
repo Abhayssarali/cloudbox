@@ -10,8 +10,20 @@ export const agentsRouter: IRouter = Router();
 
 // ---- GET /agents ----
 agentsRouter.get("/", requireAuth, async (req, res) => {
+  const userId = req.authPayload!.userId;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true, groupId: true },
+  });
+
   const agents = await prisma.agent.findMany({
-    where: { userId: req.authPayload!.userId },
+    where: {
+      OR: [
+        { userId },
+        { allocatedUserId: userId },
+        ...(user?.groupId ? [{ allocatedGroupId: user.groupId }] : []),
+      ],
+    },
     orderBy: { createdAt: "desc" },
   });
 
