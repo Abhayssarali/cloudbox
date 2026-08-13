@@ -12,15 +12,20 @@ let transport: ReturnType<typeof nodemailer.createTransport> | null = null;
 
 function getTransport() {
   if (!transport) {
-    if (!SMTP_HOST) {
+    const host = process.env["SMTP_HOST"] || "";
+    const port = process.env["SMTP_PORT"] || "587";
+    const user = process.env["SMTP_USER"] || "";
+    const pass = process.env["SMTP_PASS"] || "";
+
+    if (!host) {
       console.warn("[Mailer] SMTP_HOST not configured — email sending disabled.");
       return null;
     }
     transport = nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: parseInt(SMTP_PORT, 10),
-      secure: parseInt(SMTP_PORT, 10) === 465,
-      auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
+      host,
+      port: parseInt(port, 10),
+      secure: parseInt(port, 10) === 465,
+      auth: user ? { user, pass } : undefined,
     });
   }
   return transport;
@@ -28,14 +33,18 @@ function getTransport() {
 
 export async function sendMail(to: string, subject: string, html: string): Promise<void> {
   const t = getTransport();
-  if (!t) return; // silently skip when SMTP not configured
+  if (!t) {
+    console.error("[Mailer] Cannot send mail: SMTP_HOST environment variable is empty!");
+    return;
+  }
+
+  const from = process.env["SMTP_FROM"] || "CloudBox <noreply@cloudboxes.in>";
 
   try {
-    await t.sendMail({ from: SMTP_FROM, to, subject, html });
-    console.log(`[Mailer] Sent "${subject}" to ${to}`);
+    const info = await t.sendMail({ from, to, subject, html });
+    console.log(`[Mailer] Successfully sent "${subject}" to ${to}. MessageId: ${info.messageId}`);
   } catch (err) {
     console.error(`[Mailer] Failed to send "${subject}" to ${to}:`, err);
-    // Never propagate — email failures must not break primary flows
   }
 }
 
