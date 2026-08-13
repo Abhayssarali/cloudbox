@@ -88,7 +88,7 @@ Paste the following environment configuration into `.env`:
 ```env
 # Domain & Server Config
 CORS_ORIGIN=https://cloudboxes.in
-NEXT_PUBLIC_API_URL=https://cloudboxes.in
+NEXT_PUBLIC_API_URL=https://cloudboxes.in/api
 
 # Secrets (Generate random strings for production)
 JWT_SECRET=production-super-secret-jwt-key-cloudbox-2026

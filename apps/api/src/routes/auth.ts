@@ -4,14 +4,31 @@ import argon2 from "argon2";
 // @ts-expect-error - otplib typings don't play well with NodeNext
 import { authenticator } from "otplib";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import { prisma } from "../lib/prisma.js";
+import { redis } from "../lib/redis.js";
 import { passport } from "../lib/passport.js";
+import type { GooglePendingUser } from "../lib/passport.js";
 import { setAuthCookies, clearAuthCookies, verifyRefreshToken, signAccessToken } from "../lib/jwt.js";
 import { requireAuth } from "../middleware/auth.js";
 import { logActivity } from "../lib/activityLog.js";
 import { generateOtp, storeOtp, verifyOtp, invalidateOtp } from "../lib/emailOtp.js";
 import { sendOtpEmail } from "../lib/mailer.js";
 import type { IRouter } from "express";
+
+const GOOGLE_PENDING_TTL = 10 * 60; // 10 minutes
+const GOOGLE_PENDING_PREFIX = "google_pending:";
+
+async function storeGooglePending(token: string, profile: { googleId: string; email: string; displayName: string }): Promise<void> {
+  await redis.set(`${GOOGLE_PENDING_PREFIX}${token}`, JSON.stringify(profile), "EX", GOOGLE_PENDING_TTL);
+}
+
+async function getGooglePending(token: string): Promise<{ googleId: string; email: string; displayName: string } | null> {
+  const raw = await redis.get(`${GOOGLE_PENDING_PREFIX}${token}`);
+  if (!raw) return null;
+  await redis.del(`${GOOGLE_PENDING_PREFIX}${token}`);
+  return JSON.parse(raw) as { googleId: string; email: string; displayName: string };
+}
 
 
 export const authRouter: IRouter = Router();
@@ -170,9 +187,15 @@ authRouter.post("/login", async (req, res) => {
 
   const user = await prisma.user.findUnique({ where: { email } });
 
-  // Guard: user doesn't exist, or is a Google-only account (no password set)
-  if (!user || !user.passwordHash) {
-    res.status(401).json({ success: false, error: "Invalid credentials" });
+  // Guard: user doesn't exist — return specific error code so frontend can prompt signup
+  if (!user) {
+    res.status(401).json({ success: false, error: "No account found with this email.", errorCode: "ACCOUNT_NOT_FOUND" });
+    return;
+  }
+
+  // Guard: Google-only account (no password set)
+  if (!user.passwordHash) {
+    res.status(401).json({ success: false, error: "This account uses Google Sign-In. Please use the Google button to log in." });
     return;
   }
 
@@ -466,14 +489,123 @@ authRouter.get(
       failureRedirect: `${getFrontendUrl()}/login?error=google_failed`,
     })(req, res, next);
   },
-  (req, res) => {
-    const user = req.user as { id: string; role: "SUPER_ADMIN" | "ADMIN" | "USER" } | undefined;
-    if (!user) {
+  async (req, res) => {
+    const raw = req.user as (GooglePendingUser | { id: string; role: "SUPER_ADMIN" | "ADMIN" | "USER" }) | undefined;
+    if (!raw) {
       res.redirect(`${getFrontendUrl()}/login?error=google_failed`);
       return;
     }
 
+    // New Google user — redirect to workspace-setup page
+    if ((raw as GooglePendingUser).googlePending === true) {
+      const pending = raw as GooglePendingUser;
+      const token = crypto.randomUUID();
+      await storeGooglePending(token, { googleId: pending.googleId, email: pending.email, displayName: pending.displayName });
+      res.redirect(`${getFrontendUrl()}/signup/google-setup?token=${token}`);
+      return;
+    }
+
+    // Existing user — log in directly
+    const user = raw as { id: string; role: "SUPER_ADMIN" | "ADMIN" | "USER" };
     setAuthCookies(res, user.id, user.role);
     res.redirect(`${getFrontendUrl()}/dashboard`);
   }
 );
+
+// ---- POST /auth/google/complete ----
+// Called by the google-setup page after the user picks a workspace type.
+
+authRouter.post("/google/complete", async (req, res) => {
+  const { token, mode, workspaceName, inviteCode } = req.body as {
+    token?: string;
+    mode?: "create" | "join";
+    workspaceName?: string;
+    inviteCode?: string;
+  };
+
+  if (!token || !mode) {
+    res.status(400).json({ success: false, error: "token and mode are required" });
+    return;
+  }
+  if (mode === "create" && !workspaceName) {
+    res.status(400).json({ success: false, error: "workspaceName is required when creating a workspace" });
+    return;
+  }
+  if (mode === "join" && !inviteCode) {
+    res.status(400).json({ success: false, error: "inviteCode is required when joining a workspace" });
+    return;
+  }
+
+  // Look up pending Google profile from Redis (one-time use)
+  const pending = await getGooglePending(token);
+  if (!pending) {
+    res.status(400).json({ success: false, error: "Your setup link has expired. Please sign in with Google again.", errorCode: "TOKEN_EXPIRED" });
+    return;
+  }
+
+  // Guard: account might have been created between steps (race)
+  const existing = await prisma.user.findFirst({
+    where: { OR: [{ googleId: pending.googleId }, { email: pending.email }] },
+  });
+  if (existing) {
+    // Just log them in
+    setAuthCookies(res, existing.id, existing.role);
+    res.json({ success: true, data: { user: { id: existing.id, email: existing.email, role: existing.role } } });
+    return;
+  }
+
+  // ── Mode A: Create workspace → ADMIN ──────────────────────────────────────
+  if (mode === "create" && workspaceName) {
+    const nameConflict = await prisma.group.findUnique({ where: { name: workspaceName } });
+    if (nameConflict) {
+      res.status(409).json({ success: false, error: "A workspace with that name already exists." });
+      return;
+    }
+
+    const user = await prisma.user.create({
+      data: {
+        email: pending.email,
+        googleId: pending.googleId,
+        role: "ADMIN",
+        emailVerified: true, // Google already verified the email
+        ownedGroups: { create: { name: workspaceName } },
+      },
+      include: { ownedGroups: { select: { id: true, name: true, inviteCode: true } } },
+    });
+
+    const group = user.ownedGroups[0]!;
+    await prisma.user.update({ where: { id: user.id }, data: { groupId: group.id } });
+    await logActivity("SIGNUP", { userId: user.id, meta: { email: user.email, type: "google_create_workspace", workspace: workspaceName } });
+
+    setAuthCookies(res, user.id, user.role);
+    res.json({ success: true, data: { user: { id: user.id, email: user.email, role: user.role } } });
+    return;
+  }
+
+  // ── Mode B: Join workspace → USER ─────────────────────────────────────────
+  if (mode === "join" && inviteCode) {
+    const group = await prisma.group.findUnique({ where: { inviteCode } });
+    if (!group) {
+      res.status(404).json({ success: false, error: "Invalid invite code. Please check with your workspace admin." });
+      return;
+    }
+
+    const user = await prisma.user.create({
+      data: {
+        email: pending.email,
+        googleId: pending.googleId,
+        role: "USER",
+        emailVerified: true, // Google already verified the email
+        groupId: group.id,
+      },
+    });
+
+    await logActivity("SIGNUP", { userId: user.id, meta: { email: user.email, type: "google_join_workspace", workspace: group.name } });
+
+    setAuthCookies(res, user.id, user.role);
+    res.json({ success: true, data: { user: { id: user.id, email: user.email, role: user.role } } });
+    return;
+  }
+
+  res.status(400).json({ success: false, error: "Invalid request" });
+});

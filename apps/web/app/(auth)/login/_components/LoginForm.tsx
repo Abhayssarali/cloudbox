@@ -30,6 +30,7 @@ export default function LoginForm() {
   const [step, setStep] = useState<"login" | "totp">("login");
   const [tempToken, setTempToken] = useState<string>("");
   const [totpCode, setTotpCode] = useState("");
+  const [accountNotFound, setAccountNotFound] = useState(false);
 
   function validate(): FormErrors {
     const errs: FormErrors = {};
@@ -45,6 +46,7 @@ export default function LoginForm() {
     const errs = validate();
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setErrors({});
+    setAccountNotFound(false);
     setIsLoading(true);
     try {
       const res = await fetch(`${API_URL}/auth/login`, {
@@ -53,9 +55,13 @@ export default function LoginForm() {
         credentials: "include",
         body: JSON.stringify({ email: form.email, password: form.password }),
       });
-      const data = await res.json() as { success: boolean; error?: string; data?: { requiresTotp?: boolean; tempToken?: string; user?: { id: string; email: string; role: "SUPER_ADMIN" | "ADMIN" | "USER" } } };
+      const data = await res.json() as { success: boolean; error?: string; errorCode?: string; data?: { requiresTotp?: boolean; tempToken?: string; user?: { id: string; email: string; role: "SUPER_ADMIN" | "ADMIN" | "USER" } } };
       if (!res.ok || !data.success) {
-        setErrors({ general: data.error ?? "Invalid credentials" });
+        if (data.errorCode === "ACCOUNT_NOT_FOUND") {
+          setAccountNotFound(true);
+        } else {
+          setErrors({ general: data.error ?? "Invalid credentials" });
+        }
         return;
       }
       
@@ -151,6 +157,13 @@ export default function LoginForm() {
         </div>
       )}
 
+      {accountNotFound && (
+        <div className="lf__info-banner" role="alert">
+          <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd" /></svg>
+          <span>No account found with this email.&nbsp;<a href="/signup" className="lf__info-link">Create an account →</a></span>
+        </div>
+      )}
+
       {/* Google OAuth button */}
       <a href={`${API_URL}/auth/google`} className="lf__google-btn" id="google-signin-button">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -215,6 +228,10 @@ export default function LoginForm() {
         .lf { display: flex; flex-direction: column; gap: 1.25rem; }
         .lf__error-banner { display: flex; align-items: center; gap: .5rem; padding: .75rem 1rem; background: rgba(244,63,94,.12); border: 1px solid rgba(244,63,94,.3); border-radius: 10px; color: #fb7185; font-size: .875rem; animation: fadeIn .2s ease; }
         .lf__error-banner svg { width: 1rem; height: 1rem; flex-shrink: 0; }
+        .lf__info-banner { display: flex; align-items: flex-start; gap: .5rem; padding: .75rem 1rem; background: rgba(99,102,241,.1); border: 1px solid rgba(99,102,241,.3); border-radius: 10px; color: #a5b4fc; font-size: .875rem; animation: fadeIn .2s ease; }
+        .lf__info-banner svg { width: 1rem; height: 1rem; flex-shrink: 0; margin-top: 1px; }
+        .lf__info-link { color: #818cf8; font-weight: 600; text-decoration: underline; transition: color .15s; }
+        .lf__info-link:hover { color: white; }
 
         /* Google button */
         .lf__google-btn { display: flex; align-items: center; justify-content: center; gap: .625rem; padding: .75rem 1rem; background: rgba(255,255,255,0.05); border: 1px solid var(--cb-border); border-radius: 10px; color: var(--cb-text); font-size: .9375rem; font-weight: 500; text-decoration: none; transition: background .15s, border-color .15s, transform .1s; }

@@ -7,6 +7,15 @@ const GOOGLE_CLIENT_SECRET = process.env["GOOGLE_CLIENT_SECRET"] || "dummy-clien
 const GOOGLE_CALLBACK_URL =
   process.env["GOOGLE_CALLBACK_URL"] || "http://localhost:4000/auth/google/callback";
 
+// Sentinel type for new Google users who haven't chosen a workspace yet
+export interface GooglePendingUser {
+  googlePending: true;
+  id: "pending";
+  googleId: string;
+  email: string;
+  displayName: string;
+}
+
 passport.use(
   new GoogleStrategy(
     {
@@ -21,31 +30,36 @@ passport.use(
           return done(new Error("No email returned from Google"));
         }
 
-        // Find existing user by googleId or email, or create new one
-        let user = await prisma.user.findFirst({
+        // Check if user already exists (by googleId OR email)
+        const existing = await prisma.user.findFirst({
           where: {
             OR: [{ googleId: profile.id }, { email }],
           },
         });
 
-        if (!user) {
-          // New user — create account
-          user = await prisma.user.create({
-            data: {
-              email,
-              googleId: profile.id,
-              role: "USER",
-            },
-          });
-        } else if (!user.googleId) {
-          // Existing email/password user — link Google account
-          user = await prisma.user.update({
-            where: { id: user.id },
-            data: { googleId: profile.id },
-          });
+        if (existing) {
+          // Existing user: link their Google account if not already linked, then log in
+          if (!existing.googleId) {
+            const updated = await prisma.user.update({
+              where: { id: existing.id },
+              data: { googleId: profile.id },
+            });
+            return done(null, updated);
+          }
+          return done(null, existing);
         }
 
-        return done(null, user);
+        // New Google user — don't create them yet.
+        // Return a pending sentinel so the callback route can redirect them
+        // to the workspace-setup page before creating their account.
+        const pending: GooglePendingUser = {
+          googlePending: true,
+          id: "pending",
+          googleId: profile.id,
+          email,
+          displayName: profile.displayName ?? email,
+        };
+        return done(null, pending as unknown as Express.User);
       } catch (err) {
         return done(err instanceof Error ? err : new Error(String(err)));
       }
