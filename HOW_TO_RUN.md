@@ -84,3 +84,34 @@ Observability endpoints:
 - Issue certificates with Certbot/Let's Encrypt, then mount them at the paths referenced in the Nginx config.
 - Configure GitHub Actions deploy secrets (`DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, optional `DEPLOY_PATH`) to enable deploy-on-main.
 - On Ubuntu storage nodes, run `scripts/install-agent.sh` from a checked-out release to install the agent and systemd service.
+
+---
+
+## 10. Clearing / Resetting the Database
+
+### Option A — Quick Truncate (wipes all user data, keeps schema) ⚡
+Instantly deletes all users, workspaces, files, agents, and activity logs:
+```bash
+docker compose exec postgres psql -U cloudbox -d cloudbox_db -c "TRUNCATE users, groups, files, agents, activity_logs CASCADE;"
+```
+
+### Option B — Full Schema Reset via Prisma
+Drops and re-applies the entire database schema (all data is lost):
+```bash
+docker compose exec -w /app/apps/api api npx prisma@5.17.0 db push --force-reset
+```
+
+### Option C — Complete Fresh Start (wipes DB + Redis volumes entirely)
+Destroys all Docker volumes and restarts all containers from scratch:
+```bash
+docker compose down -v
+docker compose up -d
+```
+*(After this, re-run `pnpm --filter api run prisma:migrate` to re-apply the schema)*
+
+### Clearing Redis Only
+Flushes all cached OTPs, claim codes, and session tokens from Redis:
+```bash
+docker compose exec redis redis-cli FLUSHALL
+```
+
