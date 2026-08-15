@@ -107,7 +107,7 @@ Destroys all Docker volumes and restarts all containers from scratch:
 docker compose down -v
 docker compose up -d
 ```
-*(After this, re-run `pnpm --filter api run prisma:migrate` to re-apply the schema)*
+*(On **AWS/Docker**: The API container automatically re-applies the schema on next startup — no extra command needed. On **local dev** outside Docker: re-run `pnpm --filter api run prisma:migrate`)*
 
 ### Clearing Redis Only
 Flushes all cached OTPs, claim codes, and session tokens from Redis:
