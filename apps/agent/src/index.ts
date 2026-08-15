@@ -70,8 +70,8 @@ program
         process.exit(1);
       }
 
-      const resolvedApiUrl = options.api || process.env.API_URL || "http://localhost:4000";
-      const resolvedGatewayUrl = options.gateway || process.env.GATEWAY_URL || "ws://localhost:4001";
+      const resolvedApiUrl = options.api || process.env.API_URL || "https://cloudboxes.in/api";
+      const resolvedGatewayUrl = options.gateway || process.env.GATEWAY_URL || "wss://gateway.cloudboxes.in";
 
       console.log("[CloudBox] Generating 2048-bit RSA keypair...");
       const { publicKey, privateKey } = generateKeyPairSync("rsa", {
@@ -120,7 +120,7 @@ program
   .description("Start the agent and connect to the CloudBox gateway")
   .action(() => {
     const config = loadConfig();
-    const resolvedGatewayUrl = process.env.GATEWAY_URL || config.gatewayUrl || "ws://localhost:4001";
+    const resolvedGatewayUrl = process.env.GATEWAY_URL || config.gatewayUrl || "wss://gateway.cloudboxes.in";
     let reconnectDelay = 1000;
     const MAX_DELAY = 30_000;
     let activeWatcher: ReturnType<typeof watchStorage> | null = null;
