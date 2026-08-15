@@ -25,28 +25,49 @@ passport.use(
     },
     async (_accessToken, _refreshToken, profile, done) => {
       try {
-        const email = profile.emails?.[0]?.value;
-        if (!email) {
+        const rawEmail = profile.emails?.[0]?.value;
+        if (!rawEmail) {
           return done(new Error("No email returned from Google"));
         }
+        const email = rawEmail.toLowerCase().trim();
 
-        // Check if user already exists (by googleId OR email)
+        // Check if user already exists (by googleId OR case-insensitive email)
         const existing = await prisma.user.findFirst({
           where: {
-            OR: [{ googleId: profile.id }, { email }],
+            OR: [
+              { googleId: profile.id },
+              { email: { equals: email, mode: "insensitive" } },
+            ],
+          },
+          include: {
+            ownedGroups: true,
+            group: true,
           },
         });
 
         if (existing) {
-          // Existing user: link their Google account if not already linked, then log in
-          if (!existing.googleId) {
-            const updated = await prisma.user.update({
-              where: { id: existing.id },
-              data: { googleId: profile.id },
-            });
-            return done(null, updated);
+          // If the user owns a workspace, ensure their role is ADMIN
+          let role = existing.role;
+          if (role === "USER" && (existing.ownedGroups.length > 0 || existing.group?.ownerId === existing.id)) {
+            role = "ADMIN";
           }
-          return done(null, existing);
+
+          // Existing user: link their Google account if not already linked and update role if needed
+          const dataToUpdate: { googleId?: string; role?: "ADMIN" | "USER" | "SUPER_ADMIN"; emailVerified: boolean } = {
+            emailVerified: true,
+          };
+          if (!existing.googleId) {
+            dataToUpdate.googleId = profile.id;
+          }
+          if (role !== existing.role) {
+            dataToUpdate.role = role;
+          }
+
+          const updated = await prisma.user.update({
+            where: { id: existing.id },
+            data: dataToUpdate,
+          });
+          return done(null, updated);
         }
 
         // New Google user — don't create them yet.

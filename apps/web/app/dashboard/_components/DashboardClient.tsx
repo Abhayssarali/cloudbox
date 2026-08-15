@@ -48,6 +48,7 @@ function timeAgo(iso: string): string {
 
 export default function DashboardClient() {
   const user = useAuthStore((s: AuthState) => s.user);
+  const setUser = useAuthStore((s: AuthState) => s.setUser);
   const [agents, setAgents] = useState<AgentRecord[]>([]);
   const [usage, setUsage] = useState<UserWithUsage | null>(null);
   const [fileStats, setFileStats] = useState<{ totalFiles: number; totalShares: number }>({ totalFiles: 0, totalShares: 0 });
@@ -65,7 +66,12 @@ export default function DashboardClient() {
       // Auth me
       const meRes = await fetch(`${API_URL}/auth/me`, { credentials: "include" });
       const meData = await meRes.json();
-      if (meData.success) {
+      if (meData.success && meData.data?.user) {
+        setUser({
+          id: meData.data.user.id,
+          email: meData.data.user.email,
+          role: meData.data.user.role,
+        });
         setUsage({
           usedBytes: Number(meData.data.user.usedBytes || 0),
           quotaBytes: Number(meData.data.user.quotaBytes || 0),

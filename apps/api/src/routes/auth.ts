@@ -422,6 +422,7 @@ authRouter.get("/me", requireAuth, async (req, res) => {
       quotaBytes: true,
       usedBytes: true,
       createdAt: true,
+      ownedGroups: { select: { id: true } },
       group: {
         select: { id: true, name: true, inviteCode: true, ownerId: true },
       },
@@ -433,13 +434,23 @@ authRouter.get("/me", requireAuth, async (req, res) => {
     return;
   }
 
+  // Auto-heal: If user is the owner of a workspace but role is USER, promote to ADMIN
+  let effectiveRole = user.role;
+  const isOwner = user.group?.ownerId === user.id || user.ownedGroups.length > 0;
+  if (isOwner && effectiveRole === "USER") {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { role: "ADMIN" },
+    });
+    effectiveRole = "ADMIN";
+  }
+
   // Only expose inviteCode to the workspace owner / admins
-  const isOwner = user.group?.ownerId === user.id;
   const workspace = user.group
     ? {
         id: user.group.id,
         name: user.group.name,
-        inviteCode: (user.role === "ADMIN" || user.role === "SUPER_ADMIN") && isOwner
+        inviteCode: (effectiveRole === "ADMIN" || effectiveRole === "SUPER_ADMIN") && isOwner
           ? user.group.inviteCode
           : undefined,
       }
@@ -451,7 +462,7 @@ authRouter.get("/me", requireAuth, async (req, res) => {
       user: {
         id: user.id,
         email: user.email,
-        role: user.role,
+        role: effectiveRole,
         quotaBytes: user.quotaBytes.toString(),
         usedBytes: user.usedBytes.toString(),
         createdAt: user.createdAt.toISOString(),
@@ -507,7 +518,21 @@ authRouter.get(
 
     // Existing user — log in directly
     const user = raw as { id: string; role: "SUPER_ADMIN" | "ADMIN" | "USER" };
-    setAuthCookies(res, user.id, user.role);
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      include: { ownedGroups: true, group: true },
+    });
+    let effectiveRole = dbUser?.role ?? user.role;
+    const isOwner = dbUser?.group?.ownerId === user.id || (dbUser?.ownedGroups && dbUser.ownedGroups.length > 0);
+    if (isOwner && effectiveRole === "USER") {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { role: "ADMIN" },
+      });
+      effectiveRole = "ADMIN";
+    }
+
+    setAuthCookies(res, user.id, effectiveRole);
     res.redirect(`${getFrontendUrl()}/dashboard`);
   }
 );
