@@ -10,8 +10,6 @@ import { watchStorage, scanDirectory } from "./watcher.js";
 
 const DOWNLOAD_CHUNK_SIZE = 64 * 1024; // 64 KB
 
-const API_URL = process.env.API_URL || "http://localhost:4000";
-const GATEWAY_URL = process.env.GATEWAY_URL || "ws://localhost:4001";
 const CONFIG_DIR = path.join(os.homedir(), ".cloudbox");
 const CONFIG_FILE = path.join(CONFIG_DIR, "agent.json");
 
@@ -20,6 +18,8 @@ interface AgentConfig {
   privateKey: string;
   publicKey: string;
   agentId: string;
+  apiUrl?: string;
+  gatewayUrl?: string;
 }
 
 interface RegisterResponse {
@@ -58,7 +58,9 @@ program
   .command("register")
   .description("Register this agent with the CloudBox server")
   .argument("<code>", "The 6-character claim code from the web dashboard")
-  .action(async (code) => {
+  .option("-a, --api <url>", "The API base URL of the CloudBox server (e.g. https://cloudboxes.in/api)")
+  .option("-g, --gateway <url>", "The WebSocket Gateway URL of the CloudBox server (e.g. wss://gateway.cloudboxes.in)")
+  .action(async (code, options) => {
     try {
       console.log(`[CloudBox] Starting registration with code: ${code}`);
 
@@ -67,6 +69,9 @@ program
         console.error("To register again, delete ~/.cloudbox/agent.json");
         process.exit(1);
       }
+
+      const resolvedApiUrl = options.api || process.env.API_URL || "http://localhost:4000";
+      const resolvedGatewayUrl = options.gateway || process.env.GATEWAY_URL || "ws://localhost:4001";
 
       console.log("[CloudBox] Generating 2048-bit RSA keypair...");
       const { publicKey, privateKey } = generateKeyPairSync("rsa", {
@@ -77,8 +82,8 @@ program
 
       const cloudId = randomUUID();
 
-      console.log("[CloudBox] Registering with API...");
-      const res = await fetch(`${API_URL}/agents/register`, {
+      console.log(`[CloudBox] Registering with API at: ${resolvedApiUrl}`);
+      const res = await fetch(`${resolvedApiUrl}/agents/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ claimCode: code, cloudId, publicKey }),
@@ -91,7 +96,14 @@ program
 
       if (!fs.existsSync(CONFIG_DIR)) fs.mkdirSync(CONFIG_DIR, { recursive: true });
 
-      const config: AgentConfig = { cloudId, privateKey, publicKey, agentId: data.data.agentId };
+      const config: AgentConfig = {
+        cloudId,
+        privateKey,
+        publicKey,
+        agentId: data.data.agentId,
+        apiUrl: resolvedApiUrl,
+        gatewayUrl: resolvedGatewayUrl,
+      };
       fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), { mode: 0o600 });
 
       console.log(`[CloudBox] Configuration saved securely to ${CONFIG_FILE}`);
@@ -108,6 +120,7 @@ program
   .description("Start the agent and connect to the CloudBox gateway")
   .action(() => {
     const config = loadConfig();
+    const resolvedGatewayUrl = process.env.GATEWAY_URL || config.gatewayUrl || "ws://localhost:4001";
     let reconnectDelay = 1000;
     const MAX_DELAY = 30_000;
     let activeWatcher: ReturnType<typeof watchStorage> | null = null;
@@ -115,8 +128,8 @@ program
     const activeUploads = new Map<string, fs.WriteStream>();
 
     function connect() {
-      console.log(`[Agent] Connecting to Gateway: ${GATEWAY_URL}`);
-      const ws = new WebSocket(GATEWAY_URL);
+      console.log(`[Agent] Connecting to Gateway: ${resolvedGatewayUrl}`);
+      const ws = new WebSocket(resolvedGatewayUrl);
 
       ws.on("open", () => {
         console.log("[Agent] Connected to Gateway. Waiting for auth challenge...");

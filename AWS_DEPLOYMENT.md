@@ -201,6 +201,14 @@ docker compose exec -w /app/apps/api api npx prisma@5.17.0 db push
 ## ⚡ Connecting Storage Nodes to Production
 
 Storage nodes running on Ubuntu servers or Windows PCs connect to your production instance via:
-```bash
-npx cloudbox-agent start --gateway wss://gateway.cloudboxes.com
-```
+
+1. **Register the node once** (using the claim code from the web dashboard):
+   ```bash
+   cloudbox-agent register <CLAIM_CODE> --api https://cloudboxes.in/api --gateway wss://gateway.cloudboxes.in
+   ```
+   *(This saves the API and Gateway URLs into your node's local configuration file `~/.cloudbox/agent.json`)*
+
+2. **Start the node thereafter** (no URL parameters needed!):
+   ```bash
+   cloudbox-agent start
+   ```

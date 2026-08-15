@@ -71,7 +71,7 @@ export type GatewayMessage =
   | { type: "DELETE_FILE"; path: string; requestId: string }
   | { type: "DELETE_ACK"; requestId: string; success: boolean }
   | { type: "HEARTBEAT"; agentId: string; timestamp: number }
-  | { type: "HEARTBEAT_ACK"; timestamp: number; totalDiskBytes?: number; freeDiskBytes?: number }
+  | { type: "HEARTBEAT_ACK"; timestamp: number; totalDiskBytes?: number | undefined; freeDiskBytes?: number | undefined }
   | { type: "AUTH_CHALLENGE"; challenge: string }
   | { type: "AUTH_RESPONSE"; cloudId: string; signature: string }
   | { type: "AUTH_OK"; agentId: string }
